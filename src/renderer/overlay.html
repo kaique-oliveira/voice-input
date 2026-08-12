@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'self'; style-src 'unsafe-inline'"
+    />
+    <title>Voice Input</title>
+    <style>
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      html, body {
+        width: 100%;
+        height: 100%;
+        background: transparent;
+        overflow: hidden;
+        font: 13px/1 -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
+        -webkit-user-select: none;
+        cursor: default;
+      }
+      #pill {
+        width: 100%;
+        height: 100%;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 0 8px 0 14px;
+        background: rgba(28, 28, 30, 0.92);
+        border: 0.5px solid rgba(255, 255, 255, 0.14);
+        border-radius: 28px;
+        color: #fff;
+        /* Arrastar pela área vazia; os botões se declaram no-drag abaixo. */
+        -webkit-app-region: drag;
+      }
+      #dot {
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        background: #e41b22;
+        flex: none;
+        animation: pulse 1.4s ease-in-out infinite;
+      }
+      @keyframes pulse {
+        0%, 100% { opacity: 1; transform: scale(1); }
+        50% { opacity: 0.35; transform: scale(0.82); }
+      }
+      #spinner {
+        width: 12px;
+        height: 12px;
+        flex: none;
+        border: 2px solid rgba(255, 255, 255, 0.25);
+        border-top-color: #fff;
+        border-radius: 50%;
+        animation: spin 0.7s linear infinite;
+        display: none;
+      }
+      @keyframes spin { to { transform: rotate(360deg); } }
+      #label {
+        flex: 1;
+        font-variant-numeric: tabular-nums;
+        font-size: 13px;
+        letter-spacing: 0.02em;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      #buttons { display: flex; gap: 6px; -webkit-app-region: no-drag; }
+      button {
+        width: 32px;
+        height: 32px;
+        border: none;
+        border-radius: 50%;
+        display: grid;
+        place-items: center;
+        cursor: pointer;
+        background: rgba(255, 255, 255, 0.12);
+        color: #fff;
+        transition: background 0.12s, transform 0.08s;
+      }
+      button:hover { background: rgba(255, 255, 255, 0.22); }
+      button:active { transform: scale(0.9); }
+      #stop:hover { background: #30d158; color: #04250f; }
+      #cancel:hover { background: #e41b22; }
+      body.busy #dot { display: none; }
+      body.busy #spinner { display: block; }
+      body.busy #buttons { display: none; }
+    </style>
+  </head>
+  <body>
+    <div id="pill">
+      <div id="dot"></div>
+      <div id="spinner"></div>
+      <div id="label">0:00</div>
+      <div id="buttons">
+        <button id="stop" title="Transcrever">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path
+              d="M2.5 8.5 L6.5 12.5 L13.5 4"
+              stroke="currentColor"
+              stroke-width="2.2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+          </svg>
+        </button>
+        <button id="cancel" title="Cancelar">
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path
+              d="M3.5 3.5 L12.5 12.5 M12.5 3.5 L3.5 12.5"
+              stroke="currentColor"
+              stroke-width="2.2"
+              stroke-linecap="round"
+            />
+          </svg>
+        </button>
+      </div>
+    </div>
+    <script src="overlay.js"></script>
+  </body>
+</html>
