@@ -1,0 +1,298 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'self'; style-src 'unsafe-inline'"
+    />
+    <title>Voice Input: Configurações</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --bg: #ffffff;
+        --panel: #f5f5f7;
+        --text: #1d1d1f;
+        --muted: #6e6e73;
+        --line: #d8d8dc;
+        --accent: #e41b22;
+        --ok: #1c8c3c;
+        --bad: #c8102e;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #1e1e1e;
+          --panel: #2a2a2c;
+          --text: #f5f5f7;
+          --muted: #9a9aa0;
+          --line: #3a3a3c;
+          --accent: #ff4d54;
+          --ok: #4cd964;
+          --bad: #ff6961;
+        }
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        padding: 20px 22px 32px;
+        font: 13px/1.5 -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
+        background: var(--bg);
+        color: var(--text);
+      }
+      h1 { font-size: 17px; margin: 0 0 18px; letter-spacing: -0.01em; }
+      section {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 14px 16px;
+        margin-bottom: 14px;
+      }
+      h2 {
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--muted);
+        margin: 0 0 12px;
+        font-weight: 600;
+      }
+      .row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 14px;
+        padding: 6px 0;
+      }
+      .row + .row { border-top: 1px solid var(--line); }
+      .row label { flex: 1; }
+      .hint { display: block; color: var(--muted); font-size: 11px; margin-top: 2px; }
+      select, input[type="number"], input[type="text"] {
+        font: inherit;
+        padding: 4px 8px;
+        border-radius: 6px;
+        border: 1px solid var(--line);
+        background: var(--bg);
+        color: var(--text);
+        min-width: 90px;
+      }
+      button {
+        font: inherit;
+        padding: 5px 12px;
+        border-radius: 6px;
+        border: 1px solid var(--line);
+        background: var(--bg);
+        color: var(--text);
+        cursor: pointer;
+      }
+      button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+      button:active { opacity: 0.7; }
+      #shortcut {
+        font-family: ui-monospace, "SF Mono", monospace;
+        min-width: 130px;
+        text-align: center;
+      }
+      #shortcut.capturing { border-color: var(--accent); color: var(--accent); }
+      textarea {
+        width: 100%;
+        height: 220px;
+        font: 12px/1.5 ui-monospace, "SF Mono", monospace;
+        padding: 10px;
+        border-radius: 8px;
+        border: 1px solid var(--line);
+        background: var(--bg);
+        color: var(--text);
+        resize: vertical;
+      }
+      .status { font-weight: 600; }
+      .status.ok { color: var(--ok); }
+      .status.bad { color: var(--bad); }
+      .actions { display: flex; gap: 8px; align-items: center; margin-top: 10px; }
+      .msg { font-size: 11px; color: var(--muted); }
+      .msg.bad { color: var(--bad); }
+      .msg.ok { color: var(--ok); }
+      .bar {
+        display: block;
+        height: 5px;
+        margin-top: 7px;
+        border-radius: 3px;
+        background: var(--line);
+        overflow: hidden;
+      }
+      .bar > span {
+        display: block;
+        height: 100%;
+        width: 0%;
+        border-radius: 3px;
+        background: var(--accent);
+        transition: width 0.2s linear;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Voice Input</h1>
+
+    <section>
+      <h2>Permissões</h2>
+      <div class="row">
+        <label>
+          Microfone
+          <span class="hint">Necessário para gravar. O áudio nunca sai do seu Mac.</span>
+        </label>
+        <span id="mic-status" class="status">…</span>
+        <button id="mic-request">Conceder</button>
+      </div>
+      <div class="row">
+        <label>
+          Acessibilidade
+          <span class="hint">Necessário para colar com ⌘V no app em foco.</span>
+        </label>
+        <span id="ax-status" class="status">…</span>
+        <button id="ax-request">Conceder</button>
+      </div>
+    </section>
+
+    <section>
+      <h2>Atalho global</h2>
+      <div class="row">
+        <label>
+          Atalho de ditado
+          <span class="hint">Aperte uma vez para gravar, de novo para transcrever.</span>
+        </label>
+        <button id="shortcut">…</button>
+      </div>
+    </section>
+
+    <section>
+      <h2>Modo de correção</h2>
+      <div class="row">
+        <label>
+          Modo
+          <span class="hint">Automático escolhe pelo app que está em foco.</span>
+        </label>
+        <select id="mode">
+          <option value="auto">Automático</option>
+          <option value="developer">Developer</option>
+          <option value="normal">Normal</option>
+        </select>
+      </div>
+      <div class="row">
+        <label>
+          Modo padrão
+          <span class="hint">Usado quando o app em foco não está mapeado.</span>
+        </label>
+        <select id="fallbackMode">
+          <option value="developer">Developer</option>
+          <option value="normal">Normal</option>
+        </select>
+      </div>
+      <div class="row">
+        <label>
+          Glossário técnico no prompt
+          <span class="hint">Enviesa o Whisper para a grafia correta dos termos. Recomendado.</span>
+        </label>
+        <input type="checkbox" id="useGlossaryPrompt" />
+      </div>
+      <div class="row">
+        <label>Dicionário determinístico</label>
+        <input type="checkbox" id="useDictionary" />
+      </div>
+      <div class="row">
+        <label>
+          Dicionário também no modo Normal
+          <span class="hint">Desligado evita "corrigir" conversa comum no WhatsApp.</span>
+        </label>
+        <input type="checkbox" id="dictionaryInNormalMode" />
+      </div>
+    </section>
+
+    <section>
+      <h2>Modelo</h2>
+      <div class="row">
+        <label>
+          Modelo de transcrição
+          <span class="hint" id="model-note">Arquivos .bin em Application Support/VoiceInput/models.</span>
+        </label>
+        <select id="model"></select>
+      </div>
+      <div class="row" id="model-download-row" hidden>
+        <label>
+          <span id="model-download-label">Modelo não instalado</span>
+          <span class="hint" id="model-download-hint"></span>
+          <span class="bar" id="model-bar" hidden><span id="model-bar-fill"></span></span>
+        </label>
+        <button class="primary" id="model-download">Baixar</button>
+        <button id="model-cancel" hidden>Cancelar</button>
+      </div>
+      <div class="row">
+        <label>Threads</label>
+        <input type="number" id="threads" min="1" max="16" />
+      </div>
+      <div class="row">
+        <label>
+          Beam size
+          <span class="hint">5 dá o melhor texto e custa ~45 ms. 1 é guloso.</span>
+        </label>
+        <input type="number" id="beamSize" min="1" max="8" />
+      </div>
+      <div class="row">
+        <label>
+          Manter em memória
+          <span class="hint">Minutos sem uso antes de liberar ~800 MB de RAM. 0 descarrega já.</span>
+        </label>
+        <input type="number" id="keepWarmMinutes" min="0" max="120" step="1" />
+      </div>
+    </section>
+
+    <section>
+      <h2>Comportamento</h2>
+      <div class="row">
+        <label>
+          Inserção do texto
+          <span class="hint">"Só copiar" não usa teclado sintético, você cola onde quiser.</span>
+        </label>
+        <select id="insertMode">
+          <option value="paste">Colar automaticamente</option>
+          <option value="clipboard">Só copiar</option>
+        </select>
+      </div>
+      <div class="row">
+        <label>
+          Restaurar área de transferência
+          <span class="hint">Devolve o que você tinha copiado depois de colar.</span>
+        </label>
+        <input type="checkbox" id="restoreClipboard" />
+      </div>
+      <div class="row">
+        <label>Sons de início e fim</label>
+        <input type="checkbox" id="playSounds" />
+      </div>
+      <div class="row">
+        <label>Abrir ao fazer login</label>
+        <input type="checkbox" id="launchAtLogin" />
+      </div>
+      <div class="row">
+        <label>
+          Duração máxima da gravação
+          <span class="hint">Segundos. Corta sozinho se você esquecer de parar.</span>
+        </label>
+        <input type="number" id="maxRecordingSec" min="10" max="1800" />
+      </div>
+    </section>
+
+    <section>
+      <h2>Dicionário pessoal</h2>
+      <p class="msg">
+        A chave é o que o Whisper erra, o valor é o certo. Chaves com espaço viram frases,
+        prefira frases quando a palavra sozinha existe em português.
+      </p>
+      <textarea id="dictionary" spellcheck="false"></textarea>
+      <div class="actions">
+        <button class="primary" id="dict-save">Salvar dicionário</button>
+        <button id="dict-reset">Restaurar padrão</button>
+        <button id="open-data">Abrir pasta de dados</button>
+        <span class="msg" id="dict-msg"></span>
+      </div>
+    </section>
+
+    <script src="settings.js"></script>
+  </body>
+</html>

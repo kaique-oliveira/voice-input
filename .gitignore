@@ -1,0 +1,10 @@
+# Dependências e saídas de build
+node_modules/
+dist/
+dist-app/
+.build/
+resources/bin/
+
+# Sistema
+.DS_Store
+*.log
