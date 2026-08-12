@@ -143,4 +143,5 @@ app.on('window-all-closed', () => {
 app.on('will-quit', () => {
   globalShortcut.unregisterAll();
   session?.whisper.shutdown();
+  session?.llm.shutdown();
 });

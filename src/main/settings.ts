@@ -3,7 +3,7 @@ import path from 'node:path';
 import { loadConfig, saveConfig, DEFAULT_CONFIG, type Config } from './config';
 import { loadDictionary, saveDictionary, DEFAULT_DICTIONARY } from './dictionary';
 import { dataDir } from './paths';
-import { MODELS, isInstalled, installedModels, download, cancelDownload } from './model';
+import { MODELS, POLISH_MODELS, isInstalled, installedModels, download, cancelDownload } from './model';
 import * as helper from './helper';
 import * as platform from './platform';
 
@@ -61,8 +61,8 @@ export function hideSettings(): void {
   if (window && !window.isDestroyed() && window.isVisible()) window.hide();
 }
 
-function modelCatalog() {
-  return MODELS.map((entry) => ({
+function toCatalog(list: typeof MODELS) {
+  return list.map((entry) => ({
     file: entry.file,
     label: entry.label,
     note: entry.note,
@@ -85,7 +85,8 @@ export function registerSettingsIpc(hooks: SettingsHooks): void {
       dictionary: loadDictionary(),
       permissions,
       models: installedModels(),
-      catalog: modelCatalog(),
+      catalog: toCatalog(MODELS),
+      polishCatalog: toCatalog(POLISH_MODELS),
     };
   });
 

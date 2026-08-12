@@ -62,7 +62,7 @@ git -C "$ROOT" diff --quiet 2>/dev/null || BUILD_REF="$BUILD_REF+"
 cat > "$APP_ROOT/package.json" <<JSON
 {
   "name": "voice-input",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "buildRef": "$BUILD_REF",
   "main": "dist/main/index.js"
 }
@@ -76,7 +76,7 @@ set_plist CFBundleName            "$APP_NAME"            string
 set_plist CFBundleDisplayName     "$APP_NAME"            string
 set_plist CFBundleExecutable      "$APP_NAME"            string
 set_plist CFBundleIdentifier      "$BUNDLE_ID"           string
-set_plist CFBundleShortVersionString "0.2.0"             string
+set_plist CFBundleShortVersionString "0.3.0"             string
 set_plist CFBundleVersion         "1"                    string
 set_plist NSMicrophoneUsageDescription \
   "O Voice Input precisa do microfone para transcrever sua fala localmente."   string
@@ -110,8 +110,8 @@ fi
 
 # De dentro para fora: se os binários internos forem assinados depois, o selo
 # do bundle não fecha.
-for BIN in vox-helper whisper-server whisper-cli; do
-  codesign --force --timestamp=none --sign "$IDENTITY" "$CONTENTS/Resources/bin/$BIN"
+for BIN in vox-helper whisper-server whisper-cli llama-server; do
+  [ -f "$CONTENTS/Resources/bin/$BIN" ] && codesign --force --timestamp=none --sign "$IDENTITY" "$CONTENTS/Resources/bin/$BIN"
 done
 codesign --force --deep --timestamp=none --sign "$IDENTITY" \
   --identifier "$BUNDLE_ID" "$APP"

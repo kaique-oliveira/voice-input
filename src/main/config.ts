@@ -45,6 +45,13 @@ export interface Config {
    */
   insertMode: 'paste' | 'clipboard';
   /**
+   * Segundo estágio: um modelo de linguagem local desembaraça a estrutura da
+   * fala, sem reescrever. Toda saída dele passa por uma verificação de
+   * fidelidade, e o texto original prevalece em qualquer dúvida.
+   */
+  polish: boolean;
+  polishModel: string;
+  /**
    * O que fazer com o áudio que estiver tocando enquanto você grava.
    * 'pause' silencia e manda pausar, 'mute' só silencia, 'off' não mexe.
    */
@@ -86,6 +93,8 @@ export const DEFAULT_CONFIG: Config = {
   useGlossaryPrompt: true,
   useDictionary: true,
   removeDisfluencies: true,
+  polish: true,
+  polishModel: 'gemma-3-4b-it-Q4_K_M.gguf',
   dictionaryInNormalMode: false,
   insertMode: 'paste',
   audioWhileRecording: 'pause',

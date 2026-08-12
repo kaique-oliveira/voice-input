@@ -50,13 +50,20 @@ jobs:
       # O binário do reconhecedor não vem no repositório: depende da plataforma.
       # Sem CUDA, porque os runners não têm GPU. Quem tiver placa NVIDIA compila
       # localmente com -DGGML_CUDA=ON e ganha muita velocidade.
-      - name: Clonar whisper.cpp
-        run: git clone --depth 1 https://github.com/ggml-org/whisper.cpp.git .build/whisper.cpp
+      - name: Clonar os runtimes
+        run: |
+          git clone --depth 1 https://github.com/ggml-org/whisper.cpp.git .build/whisper.cpp
+          git clone --depth 1 https://github.com/ggml-org/llama.cpp.git .build/llama.cpp
 
       - name: Compilar whisper.cpp
         run: |
           cmake -S .build/whisper.cpp -B .build/whisper.cpp/build -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF -DWHISPER_BUILD_TESTS=OFF -DWHISPER_BUILD_EXAMPLES=ON
           cmake --build .build/whisper.cpp/build --config Release --target whisper-server whisper-cli
+
+      - name: Compilar llama.cpp
+        run: |
+          cmake -S .build/llama.cpp -B .build/llama.cpp/build -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF -DLLAMA_CURL=OFF -DLLAMA_BUILD_TESTS=OFF -DLLAMA_BUILD_EXAMPLES=OFF -DLLAMA_BUILD_TOOLS=ON -DLLAMA_BUILD_SERVER=ON
+          cmake --build .build/llama.cpp/build --config Release --target llama-server
 
       - name: Reunir os binários (Linux)
         if: runner.os == 'Linux'
@@ -64,6 +71,7 @@ jobs:
           mkdir -p resources/bin
           find .build/whisper.cpp/build -name 'whisper-server' -type f -perm -u+x -exec cp {} resources/bin/ \;
           find .build/whisper.cpp/build -name 'whisper-cli' -type f -perm -u+x -exec cp {} resources/bin/ \;
+          find .build/llama.cpp/build -name 'llama-server' -type f -perm -u+x -exec cp {} resources/bin/ \;
           chmod +x resources/bin/*
           test -x resources/bin/whisper-server
           ls -la resources/bin
@@ -74,6 +82,8 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force -Path resources/bin | Out-Null
           Get-ChildItem -Path .build/whisper.cpp/build -Recurse -Include whisper-server.exe, whisper-cli.exe |
+            ForEach-Object { Copy-Item $_.FullName resources/bin/ -Force }
+          Get-ChildItem -Path .build/llama.cpp/build -Recurse -Include llama-server.exe |
             ForEach-Object { Copy-Item $_.FullName resources/bin/ -Force }
           if (-not (Test-Path resources/bin/whisper-server.exe)) { throw 'whisper-server.exe não foi produzido' }
           Get-ChildItem resources/bin

@@ -15,6 +15,7 @@ const FIELDS = [
   ['useGlossaryPrompt', 'checked'],
   ['useDictionary', 'checked'],
   ['removeDisfluencies', 'checked'],
+  ['polish', 'checked'],
   ['dictionaryInNormalMode', 'checked'],
   ['restoreClipboard', 'checked'],
   ['playSounds', 'checked'],
@@ -104,8 +105,35 @@ async function refresh() {
   $('shortcut').textContent = pretty(config.shortcut);
   $('dictionary').value = JSON.stringify(dictionary, null, 2);
 
+  // Segundo estágio: a linha de download só aparece se o modelo faltar.
+  const polishEntry = state.polishCatalog.find((e) => e.file === config.polishModel);
+  polishModelFile = config.polishModel;
+  const needsPolishModel = config.polish && polishEntry && !polishEntry.installed;
+  $('polish-download-row').hidden = !needsPolishModel;
+  if (polishEntry && !polishEntry.installed) {
+    $('polish-label').textContent = 'Modelo não instalado';
+    $('polish-hint').textContent = `${formatBytes(polishEntry.bytes)}. ${polishEntry.note}`;
+  }
+
   applyPermissions(permissions);
 }
+
+let polishModelFile = '';
+
+$('polish-download').addEventListener('click', async () => {
+  $('polish-download').hidden = true;
+  $('polish-bar').hidden = false;
+  $('polish-label').textContent = 'Baixando…';
+  const result = await window.api.downloadModel(polishModelFile);
+  if (!result.ok && result.error) {
+    $('polish-label').textContent = 'Falha no download';
+    $('polish-hint').textContent = result.error;
+    $('polish-download').hidden = false;
+    $('polish-bar').hidden = true;
+    return;
+  }
+  void refresh();
+});
 
 function applyPermissions(permissions) {
   if (!permissions) {
@@ -260,11 +288,13 @@ $('model-download').addEventListener('click', async () => {
 
 $('model-cancel').addEventListener('click', () => window.api.cancelModelDownload());
 
-window.api.onModelProgress(({ received, total }) => {
+window.api.onModelProgress(({ file, received, total }) => {
   const percent = total > 0 ? (received / total) * 100 : 0;
-  $('model-bar-fill').style.width = `${percent.toFixed(1)}%`;
-  $('model-download-hint').textContent =
-    `${formatBytes(received)} de ${formatBytes(total)} (${percent.toFixed(0)}%)`;
+  const label = `${formatBytes(received)} de ${formatBytes(total)} (${percent.toFixed(0)}%)`;
+  // O mesmo evento serve aos dois downloads; o arquivo diz qual barra mexer.
+  const isPolish = file === polishModelFile;
+  $(isPolish ? 'polish-bar-fill' : 'model-bar-fill').style.width = `${percent.toFixed(1)}%`;
+  $(isPolish ? 'polish-hint' : 'model-download-hint').textContent = label;
 });
 
 // ---------------------------------------------------------------- permissões

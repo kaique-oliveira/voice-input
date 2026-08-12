@@ -75,6 +75,37 @@ if otool -L "$BIN_DIR/whisper-server" | grep -q "$BUILD_DIR"; then
   otool -L "$BIN_DIR/whisper-server" | grep "$BUILD_DIR" || true
 fi
 
+# ---------------------------------------------------------------- llama.cpp
+# Runtime do segundo estágio, que desembaraça a estrutura da fala.
+if [ ! -d "$BUILD_DIR/llama.cpp/.git" ]; then
+  say "Clonando llama.cpp"
+  git clone --depth 1 https://github.com/ggml-org/llama.cpp.git "$BUILD_DIR/llama.cpp"
+fi
+
+if [ ! -x "$BIN_DIR/llama-server" ] || [ "${FORCE_BUILD:-0}" = "1" ]; then
+  say "Compilando llama.cpp (Metal), pode levar alguns minutos"
+  cmake -S "$BUILD_DIR/llama.cpp" -B "$BUILD_DIR/llama.cpp/build" \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DBUILD_SHARED_LIBS=OFF \
+    -DGGML_METAL=ON \
+    -DGGML_METAL_EMBED_LIBRARY=ON \
+    -DLLAMA_CURL=OFF \
+    -DLLAMA_BUILD_TESTS=OFF \
+    -DLLAMA_BUILD_EXAMPLES=OFF \
+    -DLLAMA_BUILD_TOOLS=ON \
+    -DLLAMA_BUILD_SERVER=ON \
+    >/dev/null
+
+  cmake --build "$BUILD_DIR/llama.cpp/build" --config Release \
+        --target llama-server -j "$(sysctl -n hw.ncpu)"
+
+  find "$BUILD_DIR/llama.cpp/build" -name 'llama-server' -type f -perm -u+x \
+    -exec cp {} "$BIN_DIR/llama-server" \; -quit
+  [ -x "$BIN_DIR/llama-server" ] || die "llama-server não foi produzido pelo build."
+else
+  say "llama-server já compilado"
+fi
+
 # ---------------------------------------------------------------- vox-helper
 say "Compilando vox-helper (Swift)"
 bash "$ROOT/scripts/build-helper.sh"

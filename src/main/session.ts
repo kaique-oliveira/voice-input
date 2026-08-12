@@ -15,6 +15,8 @@ import * as overlay from './overlay';
 import { hideSettings } from './settings';
 import { log } from './log';
 import { WhisperService, WhisperError } from './whisper';
+import { LlmService } from './llm';
+import { POLISH_SYSTEM_PROMPT, cleanModelOutput, isFaithful } from './polish';
 
 /**
  * A máquina de estados do app. É aqui que o fluxo inteiro vive:
@@ -32,6 +34,7 @@ export type SessionState =
   | 'loading'
   | 'transcribing'
   | 'correcting'
+  | 'polishing'
   | 'pasting';
 
 /**
@@ -46,6 +49,7 @@ const STATE_LABELS: Record<SessionState, string> = {
   loading: 'Carregando modelo…',
   transcribing: 'Transcrevendo…',
   correcting: 'Corrigindo…',
+  polishing: 'Ajustando o texto…',
   pasting: 'Colando…',
 };
 
@@ -95,10 +99,12 @@ export class Session extends EventEmitter {
   private audioSuspension: Promise<platform.AudioState> | null = null;
 
   readonly whisper: WhisperService;
+  readonly llm: LlmService;
 
   constructor() {
     super();
     this.whisper = new WhisperService(loadConfig());
+    this.llm = new LlmService(loadConfig());
   }
 
   get state(): SessionState {
@@ -135,6 +141,7 @@ export class Session extends EventEmitter {
   private async begin(): Promise<void> {
     const config = loadConfig();
     this.whisper.setConfig(config);
+    this.llm.setConfig(config);
 
     this.wavPath = path.join(tmpDir, `rec-${Date.now()}.wav`);
     this.startedAt = Date.now();
@@ -171,6 +178,9 @@ export class Session extends EventEmitter {
     // o erro real é recuperado em finish().
     this.warmup = this.whisper.ensureReady();
     this.warmup.catch(() => undefined);
+    // O segundo estágio também esquenta durante a fala. Ele carrega em menos
+    // de um segundo, mas de graça é melhor.
+    if (config.polish && this.llm.available) this.llm.ensureReady().catch(() => undefined);
 
     try {
       this.recording = await recordPromise;
@@ -238,8 +248,14 @@ export class Session extends EventEmitter {
       });
       if (result.empty) throw new SessionError('EMPTY_AUDIO');
 
+      let finalText = result.text;
+      if (config.polish && this.llm.available) {
+        this.setState('polishing');
+        finalText = await this.polish(finalText, dictionary);
+      }
+
       this.setState('pasting');
-      await this.insert(result.text, config, front?.bundleId);
+      await this.insert(finalText, config, front?.bundleId);
       log.info(
         config.insertMode === 'clipboard'
           ? `copiado para a área de transferência (${Date.now() - startedProcessing} ms)`
@@ -247,7 +263,7 @@ export class Session extends EventEmitter {
       );
 
       this.emit('transcript', {
-        text: result.text,
+        text: finalText,
         mode,
         seconds,
         ms: Date.now() - startedProcessing,
@@ -264,6 +280,7 @@ export class Session extends EventEmitter {
       overlay.hide();
       this.cleanupWav();
       this.whisper.scheduleUnload();
+      this.llm.scheduleUnload();
       this.warmup = null;
     }
   }
@@ -349,6 +366,38 @@ export class Session extends EventEmitter {
     // Ainda nós: usa o último app externo conhecido, ou desiste de forçar o
     // foco e cola onde estiver.
     return this.lastExternalApp;
+  }
+
+  /**
+   * Segundo estágio, com rede de proteção.
+   *
+   * Nunca lança e nunca piora: qualquer falha, timeout ou saída reprovada pela
+   * verificação de fidelidade devolve o texto que entrou. O modelo de
+   * linguagem é uma sugestão que precisa passar na conferência, não uma
+   * autoridade sobre o que você falou.
+   */
+  private async polish(text: string, dictionary: Record<string, string>): Promise<string> {
+    const started = Date.now();
+    try {
+      const raw = await this.llm.complete(
+        POLISH_SYSTEM_PROMPT,
+        text,
+        // Teto generoso: cortar no meio produziria texto truncado, que a
+        // verificação reprovaria de qualquer forma.
+        Math.min(2048, Math.ceil(text.length / 2) + 256)
+      );
+      const candidate = cleanModelOutput(raw);
+      const check = isFaithful(text, candidate, Object.values(dictionary));
+      if (!check.ok) {
+        log.warn(`polimento descartado: ${check.reason} (${Date.now() - started} ms)`);
+        return text;
+      }
+      log.info(`polimento aplicado (${Date.now() - started} ms)`);
+      return candidate;
+    } catch (error) {
+      log.error('polimento falhou, seguindo com o texto original', error);
+      return text;
+    }
   }
 
   /**

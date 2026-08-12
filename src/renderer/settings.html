@@ -253,6 +253,29 @@
     </section>
 
     <section>
+      <h2>Segundo estágio</h2>
+      <div class="row">
+        <label>
+          Ajustar a estrutura da fala
+          <span class="hint">
+            Um modelo local desembaraça frase reformulada no meio e pontua. Toda
+            saída passa por uma conferência: se ele reescrever, resumir ou perder
+            um termo técnico, o texto original prevalece.
+          </span>
+        </label>
+        <input type="checkbox" id="polish" />
+      </div>
+      <div class="row" id="polish-download-row" hidden>
+        <label>
+          <span id="polish-label">Modelo não instalado</span>
+          <span class="hint" id="polish-hint"></span>
+          <span class="bar" id="polish-bar" hidden><span id="polish-bar-fill"></span></span>
+        </label>
+        <button class="primary" id="polish-download">Baixar</button>
+      </div>
+    </section>
+
+    <section>
       <h2>Comportamento</h2>
       <div class="row">
         <label>

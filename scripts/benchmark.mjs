@@ -29,6 +29,10 @@ const audioDir = path.join(dataDir, 'bench-audio');
 
 const args = process.argv.slice(2);
 const useMicrophone = args.includes('--record');
+// Fala mais rápida é mais difícil de transcrever. Serve para separar modelos
+// que empatam na velocidade normal, onde todos acertam quase tudo.
+const rate = args.includes('--rate') ? Number(args[args.indexOf('--rate') + 1]) : 180;
+const voice = args.includes('--voice') ? args[args.indexOf('--voice') + 1] : 'Luciana';
 const modelArg = args[args.indexOf('--model') + 1];
 const model = path.join(
   dataDir,
@@ -60,20 +64,13 @@ const PHRASES = [
     terms: ['console.log', 'debugar', 'React'] },
 ];
 
-const GLOSSARY_PROMPT =
-  'Transcrição de um desenvolvedor brasileiro falando sobre programação. ' +
-  'Termos que aparecem com frequência: Git, commit, push, pull request, merge, ' +
-  'rebase, branch, deploy, build, release, Docker, Kubernetes, TypeScript, ' +
-  'JavaScript, Python, React, Next.js, Node.js, PostgreSQL, Redis, MongoDB, ' +
-  'API, REST, endpoint, webhook, GitHub, GitLab, npm, Vercel, Supabase, ' +
-  'Tailwind, Prisma, ESLint, backend, frontend, database, query, cache, token, ' +
-  'log, debug, refactor, container, localhost, JSON, SQL, CI/CD, Claude Code, ' +
-  'Cursor, ChatGPT.';
 
-// Reaproveita o corretor de verdade do app, nada de reimplementar a lógica aqui.
-let applyDictionary;
+// Reaproveita corretor e glossário de verdade do app. Duplicar o prompt aqui
+// já causou o benchmark medir uma configuração que o app não usava mais.
+let applyDictionary, buildPrompt, termsFromDictionary;
 try {
   ({ applyDictionary } = require(path.join(root, 'dist', 'main', 'corrector.js')));
+  ({ buildPrompt, termsFromDictionary } = require(path.join(root, 'dist', 'main', 'glossary.js')));
 } catch {
   console.error('Rode "npm run build" antes do benchmark.');
   process.exit(1);
@@ -82,6 +79,7 @@ try {
 const dictionary = JSON.parse(
   fs.readFileSync(path.join(dataDir, 'dictionary.json'), 'utf8')
 );
+const GLOSSARY_PROMPT = buildPrompt('developer', termsFromDictionary(dictionary));
 
 // ---------------------------------------------------------------- áudio
 
@@ -103,14 +101,15 @@ async function recordPhrase(phrase, wav) {
 async function ensureAudio() {
   fs.mkdirSync(audioDir, { recursive: true });
   for (const phrase of PHRASES) {
-    const wav = path.join(audioDir, `${useMicrophone ? 'voz' : 'say'}-${phrase.id}.wav`);
+    const tag = useMicrophone ? 'voz' : `${voice.toLowerCase()}-${rate}`;
+    const wav = path.join(audioDir, `${tag}-${phrase.id}.wav`);
     phrase.wav = wav;
     if (fs.existsSync(wav)) continue;
     if (useMicrophone) {
       await recordPhrase(phrase, wav);
     } else {
       const aiff = `${wav}.aiff`;
-      execFileSync('say', ['-v', 'Luciana', '-o', aiff, phrase.text]);
+      execFileSync('say', ['-v', voice, '-r', String(rate), '-o', aiff, phrase.text]);
       execFileSync('afconvert', ['-f', 'WAVE', '-d', 'LEI16@16000', '-c', '1', aiff, wav]);
       fs.unlinkSync(aiff);
     }
@@ -150,7 +149,9 @@ async function main() {
     process.exit(1);
   }
   console.log(`\nModelo: ${path.basename(model)}`);
-  console.log(`Áudio:  ${useMicrophone ? 'sua voz' : 'síntese do macOS (say)'}\n`);
+  console.log(
+    `Áudio:  ${useMicrophone ? 'sua voz' : `síntese do macOS (${voice}, ${rate} palavras/min)`}\n`
+  );
 
   await ensureAudio();
 

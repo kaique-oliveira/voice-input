@@ -113,6 +113,7 @@ Quatro peças, cada uma com um trabalho:
 | Electron e TypeScript | atalho, menu, máquina de estados | sempre |
 | `vox-helper` (Swift) | grava, cola, lê o app em foco | milissegundos por comando |
 | `whisper-server` (C++ com Metal) | transcrição | sob demanda, morre após 5 min ocioso |
+| `llama-server` (C++ com Metal) | estrutura da frase | sob demanda, morre após 5 min ocioso |
 | Correção | glossário e dicionário | é código puro, não é processo |
 
 ### Decisões de arquitetura
@@ -122,7 +123,7 @@ que condiciona o decoder com um glossário técnico. É o mecanismo mais eficaz
 contra o abrasileiramento de termos em inglês, e os outros runtimes não têm
 equivalente. De quebra, é binário estático: nenhum Python no projeto.
 
-**Nenhum LLM na correção.** Os números medidos:
+**Correção em camadas, da mais barata para a mais cara.** Os números medidos:
 
 | Pipeline | Termos técnicos corretos | Custo |
 |---|---|---|
@@ -130,9 +131,35 @@ equivalente. De quebra, é binário estático: nenhum Python no projeto.
 | Mais glossário no prompt | 87,9% | 698 ms |
 | Mais dicionário determinístico | **93,9%** | 693 ms |
 
-Um LLM custaria mais 2 GB de RAM, mais 2 segundos de latência e o risco de
-reescrever o que você falou, para disputar os 6% restantes. A interface está
-pronta em `corrector.ts` caso um dia valha a pena.
+Grafia de termo técnico se resolve com glossário e dicionário, que custam
+milissegundos. O modelo de linguagem só entra no que sobra, que é estrutura de
+frase, e por isso é a última camada e não a primeira.
+
+**O segundo estágio nunca decide sozinho.** Ele resolve um problema que nenhum
+reconhecedor resolve: quando você começa uma frase, se interrompe e recomeça de
+outro jeito, a transcrição fiel fica embaralhada.
+
+```
+- Então eu queria que ele, na verdade, o que eu quero é que ele entenda melhor
+  o tom, sabe, tipo assim, quando eu me perco no meio da frase, ah, não, é
+  isso, ele acaba escrevendo uma coisa sem pé nem cabeça.
+
++ O que eu quero é que ele entenda melhor o tom. Quando eu me perco no meio da
+  frase, ele acaba escrevendo uma coisa sem pé nem cabeça.
+```
+
+O risco é conhecido: modelo de linguagem adora reescrever. Então nada é
+confiado a ele. Toda saída passa por três conferências, todas verificáveis sem
+modelo nenhum:
+
+1. **inventou palavra?** acima de 18% de palavras novas, descarta
+2. **apagou conteúdo?** abaixo de 72% preservado, ou 70% do último terço,
+   descarta
+3. **perdeu termo técnico?** descarta
+
+Qualquer reprovação devolve o texto da etapa anterior. O pior caso desta camada
+é não melhorar, nunca é virar outra coisa. Nos testes ela pegou o modelo
+trocando "commita" por "comite" e engolindo o final de uma fala.
 
 **Helper em Swift.** Gravar pelo renderer do Electron custaria ou 80 MB
 permanentes de memória, ou 300 ms de latência no início da fala, o que corta a
@@ -276,6 +303,7 @@ os que faltaram.
 | `threads` | `6` | threads do whisper |
 | `keepModelWarmMs` | `300000` | quanto o modelo fica em RAM sem uso |
 | `mode` | `auto` | `auto`, `developer` ou `normal` |
+| `polish` | `true` | segundo estágio que desembaraça a estrutura da fala |
 | `insertMode` | `paste` | `paste` cola com ⌘V, `clipboard` só copia |
 | `audioWhileRecording` | `pause` | `pause` pausa e silencia, `mute` só silencia, `off` não mexe |
 | `restoreClipboard` | `false` | ligado devolve o clipboard anterior, desligado deixa a transcrição como reserva |
@@ -442,7 +470,6 @@ scripts/                    setup, empacotamento, benchmark, diagnóstico
 
 ## Roadmap
 
-- [ ] LLM local opcional na correção, se o benchmark justificar
 - [ ] Assinatura estável para não perder permissões a cada atualização
 - [ ] Push-to-talk
 - [ ] Histórico de transcrições
