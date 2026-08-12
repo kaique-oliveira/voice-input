@@ -1,4 +1,5 @@
-import { Menu, Notification, Tray, shell } from 'electron';
+import { app, Menu, Notification, Tray, shell } from 'electron';
+import path from 'node:path';
 import { trayIcons } from './icons';
 import { loadConfig, saveConfig } from './config';
 import { dictionaryFile } from './paths';
@@ -27,6 +28,23 @@ export function formatAccelerator(accelerator: string): string {
 
 function modelLabel(fileName: string): string {
   return fileName.replace(/^ggml-/, '').replace(/\.bin$/, '');
+}
+
+/**
+ * Versão e commit do build em execução. Responde de uma vez a pergunta "o app
+ * aberto é mesmo o que eu acabei de instalar?", que só se respondia comparando
+ * datas de arquivo na mão.
+ */
+function buildLabel(): string {
+  const version = app.getVersion();
+  try {
+    const manifest = require(path.join(app.getAppPath(), 'package.json')) as {
+      buildRef?: string;
+    };
+    return manifest.buildRef ? `${version} (${manifest.buildRef})` : version;
+  } catch {
+    return version;
+  }
 }
 
 function formatElapsed(ms: number): string {
@@ -115,7 +133,7 @@ export class TrayController {
       warm === 'ready' ? 'em memória' : warm === 'loading' ? 'carregando…' : 'descarregado';
 
     this.menu = Menu.buildFromTemplate([
-      { label: `🎙  Voice Input`, enabled: false },
+      { label: `🎙  Voice Input ${buildLabel()}`, enabled: false },
       { label: `Status: ${this.session.stateLabel}`, enabled: false },
       { label: 'Clique no ícone para gravar', enabled: false },
       { type: 'separator' },

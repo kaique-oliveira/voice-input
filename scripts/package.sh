@@ -53,10 +53,17 @@ cp -R "$ROOT/dist" "$APP_ROOT/dist"
 # quando app.isPackaged é verdadeiro.
 cp -R "$ROOT/resources/bin" "$CONTENTS/Resources/bin"
 
+# O commit vai embutido para o menu poder dizer exatamente qual código está
+# rodando. Sem isso, "é este build mesmo?" só se responde comparando datas de
+# arquivo. O sufixo + marca build com alterações não commitadas.
+BUILD_REF="$(git -C "$ROOT" rev-parse --short HEAD 2>/dev/null || echo desconhecido)"
+git -C "$ROOT" diff --quiet 2>/dev/null || BUILD_REF="$BUILD_REF+"
+
 cat > "$APP_ROOT/package.json" <<JSON
 {
   "name": "voice-input",
   "version": "0.1.0",
+  "buildRef": "$BUILD_REF",
   "main": "dist/main/index.js"
 }
 JSON
