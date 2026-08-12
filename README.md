@@ -324,8 +324,22 @@ Reais, não contornáveis por código:
 
 ## Windows e Linux
 
-> **Experimental.** O código existe e o build funciona, mas nunca foi executado
-> em Windows nem em Linux pelo autor. Relatos de teste são muito bem-vindos.
+> **Experimental.** Os instaladores são gerados automaticamente pelos runners do
+> GitHub, então compilam e empacotam de verdade, mas nunca foram executados em
+> Windows nem em Linux pelo autor. Relatos de teste são muito bem-vindos.
+
+Baixe em [Releases](https://github.com/kaique-oliveira/voice-input/releases):
+
+| Sistema | Arquivo |
+|---|---|
+| Windows | `Voice.Input.Setup.x.y.z.exe` para instalar, `Voice.Input.x.y.z.exe` para rodar sem instalar |
+| Linux | `.AppImage` para rodar direto, `.deb` para Debian e Ubuntu |
+
+Na primeira execução, abra as Configurações pelo ícone da bandeja e baixe o
+modelo de transcrição. Se a colagem automática não funcionar no seu ambiente,
+troque para "só copiar" no menu do ícone.
+
+No Linux, para a colagem automática funcionar em X11: `sudo apt install xdotool`.
 
 O que muda fora do macOS:
 
@@ -340,7 +354,11 @@ No **Wayland** a colagem automática não funciona, e isso não é bug: o protoc
 proíbe um programa qualquer de sintetizar teclas. Use o modo "só copiar", no
 menu do ícone, e cole com `Ctrl+V`.
 
-### Gerar o build
+### Gerar o build você mesmo
+
+Só é necessário se quiser compilar com CUDA, que deixa a transcrição bem mais
+rápida em placa NVIDIA. Os builds da release são sem GPU, porque os runners do
+GitHub não têm uma.
 
 Os três passos são iguais nas duas plataformas: dependências, whisper.cpp,
 empacotamento.
@@ -388,12 +406,6 @@ npm run dist:linux    # gera AppImage e .deb
 ```
 
 O resultado sai em `dist-app/`. Para só rodar sem empacotar, use `npm start`.
-
-**4. Primeira execução**
-
-Abra as Configurações pelo ícone da bandeja e baixe o modelo de transcrição. Se
-a colagem automática não funcionar no seu ambiente, troque para "só copiar" no
-menu do ícone.
 
 ### Se quiser ajudar a completar
 
