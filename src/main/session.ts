@@ -86,6 +86,7 @@ export class Session extends EventEmitter {
   private startedAt = 0;
   /** Último app que não era o nosso, alvo de reserva para a colagem. */
   private lastExternalApp: FrontApp | null = null;
+  private warnedAboutAccessibility = false;
 
   readonly whisper: WhisperService;
 
@@ -365,6 +366,14 @@ export class Session extends EventEmitter {
     this.emit('error', { code, message });
 
     new Notification({ title: 'Voice Input', body: message }).show();
+
+    // Falta de Acessibilidade quebra a função principal do app e tem conserto
+    // em dois cliques. Abrimos as Configurações uma única vez por execução:
+    // repetir a cada ditado seria pior que o problema.
+    if (code === 'AX_DENIED' && !this.warnedAboutAccessibility) {
+      this.warnedAboutAccessibility = true;
+      this.emit('needs-accessibility');
+    }
   }
 }
 

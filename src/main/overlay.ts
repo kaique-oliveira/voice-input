@@ -48,8 +48,11 @@ function create(): BrowserWindow {
     minimizable: false,
     maximizable: false,
     skipTaskbar: true,
-    // Sem foco: clicar nos botões não ativa o app nem tira o cursor de texto
-    // de onde ele está.
+    // 'panel' cria um NSPanel em vez de uma NSWindow comum. É o que torna a
+    // janela realmente não-ativadora: só com `focusable: false` o clique nos
+    // botões ainda trazia o Voice Input para frente e tirava o cursor de texto
+    // do app onde você estava.
+    type: 'panel',
     focusable: false,
     alwaysOnTop: true,
     show: false,

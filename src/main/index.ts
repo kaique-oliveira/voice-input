@@ -78,7 +78,7 @@ app.whenReady().then(() => {
   session = new Session();
 
   registerOverlayIpc({
-    stop: () => void session.toggle(),
+    stop: () => void session.toggle('painel flutuante'),
     cancel: () => session.cancel(),
   });
 
@@ -98,6 +98,7 @@ app.whenReady().then(() => {
   });
 
   session.on('error', () => tray.render());
+  session.on('needs-accessibility', () => openSettings());
 
   const config = loadConfig();
   registerShortcut(config);
