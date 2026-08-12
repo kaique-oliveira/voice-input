@@ -273,6 +273,52 @@ Reais, não contornáveis por código:
 
 ---
 
+## Windows e Linux
+
+Hoje o app roda **apenas em macOS**, e prefiro dizer isso claramente a anunciar
+uma compatibilidade que não foi testada.
+
+A maior parte do projeto já é portátil. O que trava é pequeno e bem delimitado.
+
+**Funciona em qualquer sistema, sem alteração:**
+
+- toda a lógica em TypeScript: máquina de estados, modos, glossário, dicionário,
+  correção, catálogo e download do modelo
+- o whisper.cpp, que compila em Windows e Linux (troque o Metal por CUDA,
+  Vulkan ou CPU no `scripts/setup.sh`)
+- a janela de configurações e o painel flutuante, que são HTML puro
+
+**Precisa de uma implementação nova:** o `vox-helper`, que é Swift e concentra
+de propósito as três funções que dependem do sistema operacional. Qualquer porte
+só precisa entregar um executável que fale o mesmo protocolo de JSON por linha,
+descrito em [`native/VoxHelper.swift`](native/VoxHelper.swift).
+
+| Função | macOS (hoje) | Windows | Linux |
+|---|---|---|---|
+| Gravar 16 kHz mono | AVAudioEngine | WASAPI, ou `ffmpeg -f dshow` | PipeWire ou `parec` |
+| Colar no app em foco | CGEvent com ⌘V | `SendInput` com Ctrl+V | `xdotool key ctrl+v` no X11, `wtype` no Wayland |
+| Ler o app em foco | NSWorkspace | `GetForegroundWindow` | `xdotool getactivewindow` no X11 |
+| Permissões | TCC | não se aplica | não se aplica |
+
+Dois avisos para quem for portar:
+
+1. **Wayland é o ponto difícil.** Por segurança ele não deixa um programa
+   qualquer sintetizar teclas nem descobrir a janela ativa. Em vários ambientes
+   só dá para usar o modo "só copiar", em que o app coloca o texto na área de
+   transferência e você cola.
+2. `src/main/paths.ts` fixa o caminho do macOS. Trocar por
+   `app.getPath('userData')` resolve nas três plataformas, mas move a pasta de
+   dados de quem já usa.
+
+O empacotamento também é específico: o `scripts/package.sh` monta um bundle
+`.app` na mão. Para gerar `.exe` ou `.AppImage` o caminho natural é o
+`electron-builder`, que resolve as três plataformas de uma vez.
+
+Contribuições nesse sentido são bem-vindas. Abra uma issue antes de começar,
+para combinarmos o formato do helper.
+
+---
+
 ## Estrutura
 
 ```

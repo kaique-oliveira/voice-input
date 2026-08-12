@@ -70,6 +70,39 @@ export function applyDictionary(text: string, dictionary: Record<string, string>
   return output;
 }
 
+/**
+ * Marcadores de concordância que o Whisper pontua como pergunta.
+ *
+ * "configuração e tudo mais, né?" não é uma pergunta: é o jeito de falar. O
+ * ponto de interrogação muda o tom da frase escrita, então vira vírgula.
+ * A lista é curta de propósito, só com marcadores que praticamente nunca são
+ * pergunta de verdade. "sabe?" e "certo?" ficam de fora porque muitas vezes
+ * são.
+ */
+const TAG_MARKERS = ['né', 'viu'];
+
+function softenTagQuestions(text: string, protectedWords: Set<string>): string {
+  const pattern = new RegExp(
+    `(^|[\\s,])(${TAG_MARKERS.join('|')})\\?(\\s*)(\\S+)?`,
+    'giu'
+  );
+
+  return text.replace(pattern, (_match, before: string, marker: string, _gap: string, next?: string) => {
+    // No fim do texto não cabe vírgula: encerra a frase.
+    if (!next) return `${before}${marker}.`;
+
+    // Whisper capitaliza a palavra seguinte porque tratou como nova frase.
+    // Só desfazemos isso quando é claramente palavra comum: nada de "GitHub"
+    // virar "gitHub" nem "Claude" virar "claude".
+    const bare = next.replace(/[^\p{L}\p{N}]/gu, '');
+    const isOrdinaryWord =
+      /^\p{Lu}\p{Ll}+$/u.test(bare) && !protectedWords.has(bare.toLowerCase());
+    const following = isOrdinaryWord ? next[0].toLowerCase() + next.slice(1) : next;
+
+    return `${before}${marker}, ${following}`;
+  });
+}
+
 /** Remove repetição consecutiva de frase, laço clássico do decoder. */
 function dedupeLoops(text: string): string {
   const parts = text.split(/(?<=[.!?])\s+/);
@@ -112,6 +145,10 @@ export function correct(
   if (options.useDictionary) {
     text = applyDictionary(text, options.dictionary);
   }
+
+  // Depois do dicionário: os valores dele são justamente os termos que não
+  // podem ter a inicial rebaixada.
+  text = softenTagQuestions(text, new Set(Object.values(options.dictionary).map((v) => v.toLowerCase())));
 
   // Única liberdade que damos ao modo normal: garantir maiúscula inicial.
   // Nada de reescrever, resumir ou "melhorar" a frase.

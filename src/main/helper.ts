@@ -184,14 +184,24 @@ export function startRecording(wavPath: string): Promise<Recording> {
   });
 }
 
+export interface PasteResult {
+  /** App em foco antes de forçarmos o alvo. Se não for o esperado, alguém roubou o foco. */
+  frontBefore: string;
+  frontAfter: string;
+}
+
 export async function paste(
   text: string,
   options: { restoreClipboard: boolean; preDelayMs: number; ensureFrontApp?: string }
-): Promise<void> {
+): Promise<PasteResult> {
   const args = ['paste', '--pre-delay', String(options.preDelayMs)];
   if (!options.restoreClipboard) args.push('--no-restore');
   if (options.ensureFrontApp) args.push('--ensure-front', options.ensureFrontApp);
-  await runOnce(args, text, 20_000);
+  const event = await runOnce(args, text, 20_000);
+  return {
+    frontBefore: String(event.frontBefore ?? ''),
+    frontAfter: String(event.frontAfter ?? ''),
+  };
 }
 
 export interface FrontAppInfo {

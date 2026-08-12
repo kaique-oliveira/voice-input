@@ -281,6 +281,10 @@ func runPaste(restore: Bool, preDelayMs: UInt32, restoreDelayMs: UInt32, ensureF
         fail("EMPTY_TEXT", "Nada para colar.")
     }
 
+    // Quem estava em foco antes de forçarmos o alvo. Serve para diagnosticar
+    // colagem que cai no lugar errado sem ter de adivinhar.
+    let frontBefore = NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? ""
+
     let pb = NSPasteboard.general
     let saved = restore ? snapshotPasteboard(pb) : []
 
@@ -299,7 +303,12 @@ func runPaste(restore: Bool, preDelayMs: UInt32, restoreDelayMs: UInt32, ensureF
         }
     }
 
-    emit(["event": "pasted", "chars": text.count])
+    emit([
+        "event": "pasted",
+        "chars": text.count,
+        "frontBefore": frontBefore,
+        "frontAfter": NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "",
+    ])
     exit(0)
 }
 

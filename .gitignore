@@ -8,3 +8,6 @@ resources/bin/
 # Sistema
 .DS_Store
 *.log
+
+# Identidade de assinatura local, específica de cada máquina
+.signing-identity

@@ -11,6 +11,7 @@ import { correct } from './corrector';
 import { resolveMode, type FrontApp } from './context';
 import * as helper from './helper';
 import * as overlay from './overlay';
+import { hideSettings } from './settings';
 import { log } from './log';
 import { WhisperService, WhisperError } from './whisper';
 
@@ -132,6 +133,10 @@ export class Session extends EventEmitter {
 
     this.wavPath = path.join(tmpDir, `rec-${Date.now()}.wav`);
     this.startedAt = Date.now();
+
+    // Ninguém dita e configura ao mesmo tempo. Deixar a janela aberta faz ela
+    // saltar na frente do app de destino assim que o nosso app ganha foco.
+    hideSettings();
 
     // Os dois processos sobem juntos: ler o app em foco não custa latência
     // porque acontece enquanto o gravador ainda está inicializando.
@@ -263,13 +268,17 @@ export class Session extends EventEmitter {
     }
 
     try {
-      await helper.paste(text, {
+      const result = await helper.paste(text, {
         restoreClipboard: config.restoreClipboard,
         preDelayMs: config.pasteDelayMs,
         // Devolve o foco ao app de origem caso o overlay ou outra coisa o
         // tenha tirado no meio do caminho.
         ensureFrontApp: bundleId,
       });
+      // Se o foco não estava no alvo, alguma janela nossa se meteu na frente.
+      if (bundleId && result.frontBefore && result.frontBefore !== bundleId) {
+        log.warn(`foco estava em ${result.frontBefore}, devolvido para ${bundleId}`);
+      }
     } catch (error) {
       const code = error instanceof helper.HelperError ? error.code : 'desconhecido';
       log.error(`colagem falhou [${code}], texto preservado na área de transferência`);

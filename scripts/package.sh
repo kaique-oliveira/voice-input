@@ -62,7 +62,7 @@ git -C "$ROOT" diff --quiet 2>/dev/null || BUILD_REF="$BUILD_REF+"
 cat > "$APP_ROOT/package.json" <<JSON
 {
   "name": "voice-input",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "buildRef": "$BUILD_REF",
   "main": "dist/main/index.js"
 }
@@ -76,7 +76,7 @@ set_plist CFBundleName            "$APP_NAME"            string
 set_plist CFBundleDisplayName     "$APP_NAME"            string
 set_plist CFBundleExecutable      "$APP_NAME"            string
 set_plist CFBundleIdentifier      "$BUNDLE_ID"           string
-set_plist CFBundleShortVersionString "0.1.0"             string
+set_plist CFBundleShortVersionString "0.1.1"             string
 set_plist CFBundleVersion         "1"                    string
 set_plist NSMicrophoneUsageDescription \
   "O Voice Input precisa do microfone para transcrever sua fala localmente."   string
@@ -84,16 +84,41 @@ set_plist NSHumanReadableCopyright "Ferramenta pessoal, 100% local."           s
 # LSUIElement: app de barra de menu, sem ícone na Dock, sem alternador de apps.
 set_plist LSUIElement             "true"                 bool
 
-say "Assinando"
-# Assinatura ad-hoc com identificador estável. Os binários internos são
-# assinados primeiro (de dentro para fora), senão o selo do bundle não fecha.
-codesign --force --sign - "$CONTENTS/Resources/bin/vox-helper" 2>/dev/null || true
-codesign --force --sign - "$CONTENTS/Resources/bin/whisper-server" 2>/dev/null || true
-codesign --force --sign - "$CONTENTS/Resources/bin/whisper-cli" 2>/dev/null || true
-codesign --force --deep --sign - --identifier "$BUNDLE_ID" "$APP" 2>/dev/null
+# ---------------------------------------------------------------- assinatura
+#
+# Por que a identidade importa muito aqui: o macOS guarda, junto com a
+# permissão de Acessibilidade, a assinatura do app que foi autorizado. Com
+# assinatura ad-hoc o selo muda a cada build, e o sistema passa a negar a
+# permissão mesmo com o interruptor ligado no painel. Uma identidade estável
+# faz a autorização sobreviver a qualquer rebuild.
+#
+# Ordem: variável SIGN_IDENTITY, depois o arquivo .signing-identity (fora do
+# versionamento), e por último ad-hoc.
+IDENTITY="${SIGN_IDENTITY:-}"
+if [ -z "$IDENTITY" ] && [ -f "$ROOT/.signing-identity" ]; then
+  IDENTITY="$(tr -d '\n' < "$ROOT/.signing-identity")"
+fi
 
-if codesign --verify --deep "$APP" 2>/dev/null; then
+if [ -n "$IDENTITY" ]; then
+  say "Assinando com: $IDENTITY"
+else
+  say "Assinando ad-hoc (as permissões do sistema vão resetar a cada build)"
+  echo "     Para uma identidade estável, veja 'security find-identity -p codesigning -v'"
+  echo "     e grave o nome escolhido em .signing-identity"
+  IDENTITY="-"
+fi
+
+# De dentro para fora: se os binários internos forem assinados depois, o selo
+# do bundle não fecha.
+for BIN in vox-helper whisper-server whisper-cli; do
+  codesign --force --timestamp=none --sign "$IDENTITY" "$CONTENTS/Resources/bin/$BIN"
+done
+codesign --force --deep --timestamp=none --sign "$IDENTITY" \
+  --identifier "$BUNDLE_ID" "$APP"
+
+if codesign --verify --deep --strict "$APP" 2>/dev/null; then
   say "Assinatura válida"
+  codesign -dvvv "$APP" 2>&1 | grep -E "^Authority|^TeamIdentifier" | head -2 | sed 's/^/     /'
 else
   printf "\033[1;33m!!\033[0m Assinatura não verificou, o app roda, mas o macOS pode reclamar.\n"
 fi

@@ -48,6 +48,18 @@ export function openSettings(): void {
   });
 }
 
+/**
+ * Esconde a janela de configurações sem destruí-la.
+ *
+ * Chamado ao começar um ditado. Se ela ficasse aberta, bastaria o app ganhar
+ * foco por um instante para ela saltar na frente do app onde você está
+ * escrevendo, e ainda atrasar a colagem enquanto o foco volta. Esconder
+ * preserva o que estiver digitado nela.
+ */
+export function hideSettings(): void {
+  if (window && !window.isDestroyed() && window.isVisible()) window.hide();
+}
+
 function modelCatalog() {
   return MODELS.map((entry) => ({
     file: entry.file,
