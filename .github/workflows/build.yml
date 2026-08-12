@@ -47,6 +47,18 @@ jobs:
 
       - run: npm ci
 
+      # Guardar o que o electron-builder baixa evita repetir a transferência a
+      # cada execução, que é justamente onde ela costuma falhar.
+      - name: Cache do electron-builder
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/electron
+            ~/.cache/electron-builder
+            ~/AppData/Local/electron/Cache
+            ~/AppData/Local/electron-builder/Cache
+          key: builder-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+
       # O binário do reconhecedor não vem no repositório: depende da plataforma.
       # Sem CUDA, porque os runners não têm GPU. Quem tiver placa NVIDIA compila
       # localmente com -DGGML_CUDA=ON e ganha muita velocidade.
@@ -100,8 +112,19 @@ jobs:
             fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2));
           "
 
+      # O electron-builder baixa NSIS e assinatura do GitHub na hora de
+      # empacotar, e essas transferências falham de vez em quando com EOF. É
+      # rede, não código, então vale repetir antes de reprovar o build inteiro.
       - name: Empacotar
-        run: npm run ${{ matrix.script }}
+        shell: bash
+        run: |
+          for attempt in 1 2 3; do
+            if npm run ${{ matrix.script }}; then exit 0; fi
+            echo "::warning::tentativa $attempt de empacotamento falhou, repetindo"
+            sleep 20
+          done
+          echo "::error::empacotamento falhou nas três tentativas"
+          exit 1
 
       - uses: actions/upload-artifact@v4
         with:
