@@ -55,7 +55,9 @@ const ERROR_MESSAGES: Record<string, string> = {
   ENGINE_FAIL: 'Não foi possível iniciar a captura de áudio.',
   WRITE_FAIL: 'Não foi possível gravar o arquivo de áudio temporário.',
   AX_DENIED:
-    'Permissão de Acessibilidade necessária para colar. O texto ficou na área de transferência.',
+    'Sem permissão de Acessibilidade para colar. O texto está na área de transferência, cole com ⌘V.',
+  PASTE_FAILED:
+    'Não consegui colar neste app. O texto está na área de transferência, cole com ⌘V.',
   EMPTY_TEXT: 'Nada para colar.',
   EMPTY_AUDIO: 'Não ouvi nada. Fale um pouco mais perto do microfone.',
   TOO_SHORT: 'Gravação curta demais.',
@@ -245,9 +247,13 @@ export class Session extends EventEmitter {
    * do que perder o que você falou.
    */
   private async insert(text: string, config: Config, bundleId?: string): Promise<void> {
+    // A transcrição vai para a área de transferência ANTES de qualquer
+    // tentativa de colar. Colar tem várias formas de falhar que não dependem
+    // de nós: campo protegido por Secure Input, app que ignora ⌘V, permissão
+    // revogada. Em todas elas o texto continua recuperável com um ⌘V manual.
+    clipboard.writeText(text);
+
     if (config.insertMode === 'clipboard') {
-      // Modo seguro: nada de teclado sintético. Você cola quando quiser.
-      clipboard.writeText(text);
       new Notification({
         title: 'Voice Input: copiado',
         body: text.length > 140 ? `${text.slice(0, 140)}…` : text,
@@ -264,10 +270,12 @@ export class Session extends EventEmitter {
         ensureFrontApp: bundleId,
       });
     } catch (error) {
-      if (error instanceof helper.HelperError && error.code === 'AX_DENIED') {
-        clipboard.writeText(text);
-      }
-      throw error;
+      const code = error instanceof helper.HelperError ? error.code : 'desconhecido';
+      log.error(`colagem falhou [${code}], texto preservado na área de transferência`);
+      // AX_DENIED tem conserto e merece a mensagem própria. O resto vira um
+      // aviso único que diz o que fazer agora.
+      if (error instanceof helper.HelperError && error.code === 'AX_DENIED') throw error;
+      throw new SessionError('PASTE_FAILED');
     }
   }
 

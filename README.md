@@ -128,10 +128,16 @@ permanentes de memória, ou 300 ms de latência no início da fala, o que corta 
 primeira palavra. O helper é um arquivo só, sem projeto Xcode, e resolve também
 o `⌘V` sintético e a detecção do app em foco.
 
+**A transcrição sempre passa pela área de transferência.** Ela é escrita lá
+antes de qualquer tentativa de colar. Colar tem várias formas de falhar que não
+dependem do app: campo protegido por Secure Input, aplicativo que ignora `⌘V`,
+permissão revogada. Em todas elas o texto continua a um `⌘V` manual de
+distância, em vez de sumir.
+
 **Colar por `⌘V`, e não pela Accessibility API.** Escrever direto via
 `AXUIElement` funciona em apps AppKit nativos e falha em Electron, web views e
 terminais, ou seja, exatamente no Cursor, no ChatGPT e no WhatsApp. O clipboard
-funciona em todo lugar, e o conteúdo anterior é restaurado depois.
+funciona em todo lugar.
 
 **O app nunca rouba o foco.** Ele é *accessory*, sem ícone na Dock, e o atalho
 global usa `RegisterEventHotKey`. O app onde você digita continua sendo o
@@ -223,6 +229,7 @@ os que faltaram.
 | `keepModelWarmMs` | `300000` | quanto o modelo fica em RAM sem uso |
 | `mode` | `auto` | `auto`, `developer` ou `normal` |
 | `insertMode` | `paste` | `paste` cola com ⌘V, `clipboard` só copia |
+| `restoreClipboard` | `false` | ligado devolve o clipboard anterior, desligado deixa a transcrição como reserva |
 | `minPeak` | `0.004` | abaixo disso considera silêncio |
 | `maxRecordingSec` | `300` | corta sozinho se você esquecer de parar |
 

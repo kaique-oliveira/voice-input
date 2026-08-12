@@ -39,6 +39,13 @@ export interface Config {
    * 'clipboard' só copia e avisa, você cola quando e onde quiser.
    */
   insertMode: 'paste' | 'clipboard';
+  /**
+   * Devolver o conteúdo anterior da área de transferência depois de colar.
+   *
+   * Desligado por padrão de propósito: deixar a transcrição lá é a rede de
+   * segurança para quando a colagem falha em silêncio, o que acontece em campo
+   * de senha, em app que ignora ⌘V e quando a permissão é revogada.
+   */
   restoreClipboard: boolean;
   pasteDelayMs: number;
   playSounds: boolean;
@@ -70,7 +77,7 @@ export const DEFAULT_CONFIG: Config = {
   useDictionary: true,
   dictionaryInNormalMode: false,
   insertMode: 'paste',
-  restoreClipboard: true,
+  restoreClipboard: false,
   pasteDelayMs: 90,
   playSounds: true,
   launchAtLogin: false,

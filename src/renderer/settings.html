@@ -247,7 +247,10 @@
       <div class="row">
         <label>
           Inserção do texto
-          <span class="hint">"Só copiar" não usa teclado sintético, você cola onde quiser.</span>
+          <span class="hint">
+            A transcrição sempre vai para a área de transferência primeiro, então
+            nada se perde se a colagem falhar.
+          </span>
         </label>
         <select id="insertMode">
           <option value="paste">Colar automaticamente</option>
@@ -256,8 +259,11 @@
       </div>
       <div class="row">
         <label>
-          Restaurar área de transferência
-          <span class="hint">Devolve o que você tinha copiado depois de colar.</span>
+          Devolver o clipboard anterior
+          <span class="hint">
+            Ligado, restaura o que você tinha copiado. Desligado, a transcrição
+            fica disponível para um ⌘V manual caso a colagem não funcione.
+          </span>
         </label>
         <input type="checkbox" id="restoreClipboard" />
       </div>
