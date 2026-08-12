@@ -45,6 +45,11 @@ export interface Config {
    */
   insertMode: 'paste' | 'clipboard';
   /**
+   * O que fazer com o áudio que estiver tocando enquanto você grava.
+   * 'pause' silencia e manda pausar, 'mute' só silencia, 'off' não mexe.
+   */
+  audioWhileRecording: 'pause' | 'mute' | 'off';
+  /**
    * Devolver o conteúdo anterior da área de transferência depois de colar.
    *
    * Desligado por padrão de propósito: deixar a transcrição lá é a rede de
@@ -83,6 +88,7 @@ export const DEFAULT_CONFIG: Config = {
   removeDisfluencies: true,
   dictionaryInNormalMode: false,
   insertMode: 'paste',
+  audioWhileRecording: 'pause',
   restoreClipboard: false,
   pasteDelayMs: 90,
   playSounds: true,

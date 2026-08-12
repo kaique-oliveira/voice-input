@@ -80,6 +80,16 @@ Line Tools do Xcode.
 Enquanto você fala, um painel flutuante mostra o tempo decorrido, um botão para
 transcrever e outro para descartar.
 
+**O som para sozinho.** Se você estiver ouvindo música ou assistindo a alguma
+coisa, o app pausa e silencia ao começar a gravar, e devolve tudo quando você
+para. Não precisa ir até o player.
+
+Sobre o "silencia junto": o macOS não expõe de forma confiável se há algo
+tocando, o Chrome aparece como "emitindo som" mesmo em silêncio. Como a tecla de
+mídia é um alternador, mandá-la às cegas poderia ligar música do nada. Silenciar
+resolve isso: se a tecla ligar algo por engano, aquilo toca mudo e a restauração
+pausa de volta. Você nunca ouve o engano.
+
 O atalho é configurável. O padrão evita `⌥Espaço` de propósito, porque apps como
 Raycast e Alfred capturam teclas por event tap e engolem essa combinação sem que
 o registro do atalho falhe.
@@ -267,6 +277,7 @@ os que faltaram.
 | `keepModelWarmMs` | `300000` | quanto o modelo fica em RAM sem uso |
 | `mode` | `auto` | `auto`, `developer` ou `normal` |
 | `insertMode` | `paste` | `paste` cola com ⌘V, `clipboard` só copia |
+| `audioWhileRecording` | `pause` | `pause` pausa e silencia, `mute` só silencia, `off` não mexe |
 | `restoreClipboard` | `false` | ligado devolve o clipboard anterior, desligado deixa a transcrição como reserva |
 | `minPeak` | `0.004` | abaixo disso considera silêncio |
 | `maxRecordingSec` | `300` | corta sozinho se você esquecer de parar |

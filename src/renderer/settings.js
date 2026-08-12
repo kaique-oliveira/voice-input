@@ -11,6 +11,7 @@ const FIELDS = [
   ['beamSize', 'number'],
   ['maxRecordingSec', 'number'],
   ['insertMode', 'value'],
+  ['audioWhileRecording', 'value'],
   ['useGlossaryPrompt', 'checked'],
   ['useDictionary', 'checked'],
   ['removeDisfluencies', 'checked'],

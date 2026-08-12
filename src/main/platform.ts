@@ -82,6 +82,116 @@ export async function paste(
   return { frontBefore: '', frontAfter: '' };
 }
 
+// ---------------------------------------------------------------- áudio
+
+export type AudioMode = 'pause' | 'mute' | 'off';
+
+/** O que foi feito ao suspender, para saber o que desfazer depois. */
+export interface AudioState {
+  muted: boolean;
+  mediaKeySent: boolean;
+}
+
+async function readMuted(): Promise<boolean | null> {
+  try {
+    if (isMac) {
+      const { stdout } = await run('osascript', ['-e', 'output muted of (get volume settings)']);
+      return stdout.trim() === 'true';
+    }
+    if (process.platform === 'linux') {
+      const { stdout } = await run('pactl', ['get-sink-mute', '@DEFAULT_SINK@']);
+      return stdout.includes('yes');
+    }
+  } catch {
+    // Sem controle de volume disponível: seguimos sem silenciar.
+  }
+  return null;
+}
+
+async function setMuted(muted: boolean): Promise<void> {
+  if (isMac) {
+    await run('osascript', ['-e', `set volume output muted ${muted}`]);
+    return;
+  }
+  if (process.platform === 'linux') {
+    await run('pactl', ['set-sink-mute', '@DEFAULT_SINK@', muted ? '1' : '0']);
+    return;
+  }
+  // Windows não tem um comando simples e não destrutivo para isso, então lá
+  // só a tecla de mídia atua.
+}
+
+async function sendPlayPause(): Promise<boolean> {
+  try {
+    if (usesNativeHelper) {
+      await helper.mediaPlayPause();
+      return true;
+    }
+    if (process.platform === 'win32') {
+      await run('powershell', [
+        '-NoProfile',
+        '-Command',
+        'Add-Type -TypeDefinition \'using System;using System.Runtime.InteropServices;' +
+          'public class VK{[DllImport("user32.dll")]public static extern void keybd_event(' +
+          "byte b,byte s,uint f,UIntPtr e);}';" +
+          '[VK]::keybd_event(0xB3,0,0,[UIntPtr]::Zero);[VK]::keybd_event(0xB3,0,2,[UIntPtr]::Zero)',
+      ]);
+      return true;
+    }
+    // playerctl fala MPRIS, então pausa e retoma de forma explícita, sem o
+    // risco de alternar para o lado errado.
+    await run('playerctl', ['play-pause']);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Silencia (e opcionalmente pausa) o que estiver tocando antes de gravar.
+ *
+ * Silenciar é a garantia: é exato, reversível e nunca liga nada sozinho.
+ * A tecla de mídia é o extra que pausa o vídeo de verdade, mas ela é um
+ * alternador e o macOS não expõe de forma confiável se há algo tocando. O
+ * Chrome, por exemplo, aparece como "emitindo som" mesmo em silêncio.
+ *
+ * Por isso as duas coisas juntas: se a tecla ligar algo por engano, aquilo
+ * toca mudo e a restauração pausa de volta. Você nunca ouve o engano.
+ */
+export async function suspendAudio(mode: AudioMode): Promise<AudioState> {
+  if (mode === 'off') return { muted: false, mediaKeySent: false };
+
+  const wasMuted = await readMuted();
+  let muted = false;
+  if (wasMuted === false) {
+    try {
+      await setMuted(true);
+      muted = true;
+    } catch {
+      // Continua: a tecla de mídia ainda pode resolver sozinha.
+    }
+  }
+
+  const mediaKeySent = mode === 'pause' ? await sendPlayPause() : false;
+  log.info(`áudio suspenso (modo ${mode}, silenciado ${muted}, mídia ${mediaKeySent})`);
+  return { muted, mediaKeySent };
+}
+
+/** Desfaz exatamente o que `suspendAudio` fez, e nada além disso. */
+export async function restoreAudio(state: AudioState): Promise<void> {
+  // A ordem importa: retomar antes de tirar o mudo evita o estalo do primeiro
+  // instante de áudio sair alto.
+  if (state.mediaKeySent) await sendPlayPause();
+  if (state.muted) {
+    try {
+      await setMuted(false);
+    } catch {
+      log.error('não foi possível restaurar o volume');
+    }
+  }
+  if (state.muted || state.mediaKeySent) log.info('áudio restaurado');
+}
+
 export interface PlatformStatus {
   microphone: 'authorized' | 'denied' | 'restricted' | 'notDetermined' | 'unknown';
   accessibility: boolean;

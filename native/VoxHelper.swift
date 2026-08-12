@@ -21,6 +21,7 @@
 import AVFoundation
 import AppKit
 import ApplicationServices
+import CoreAudio
 import CoreGraphics
 import Foundation
 
@@ -312,6 +313,125 @@ func runPaste(restore: Bool, preDelayMs: UInt32, restoreDelayMs: UInt32, ensureF
     exit(0)
 }
 
+// MARK: - Áudio do sistema
+
+/// O dispositivo de saída padrão, ou nil se não houver nenhum.
+func defaultOutputDevice() -> AudioDeviceID? {
+    var device = AudioDeviceID(0)
+    var size = UInt32(MemoryLayout<AudioDeviceID>.size)
+    var address = AudioObjectPropertyAddress(
+        mSelector: kAudioHardwarePropertyDefaultOutputDevice,
+        mScope: kAudioObjectPropertyScopeGlobal,
+        mElement: kAudioObjectPropertyElementMain
+    )
+    let status = AudioObjectGetPropertyData(
+        AudioObjectID(kAudioObjectSystemObject), &address, 0, nil, &size, &device
+    )
+    return status == noErr && device != 0 ? device : nil
+}
+
+/// Quais aplicativos estão de fato emitindo som agora.
+///
+/// É a proteção que impede o play/pause de COMEÇAR a tocar algo quando não
+/// havia nada tocando: a tecla de mídia é um alternador, então sem esta
+/// checagem o app ligaria o Spotify sozinho toda vez que você fosse ditar.
+///
+/// Usa a lista de processos de áudio, e não
+/// `kAudioDevicePropertyDeviceIsRunningSomewhere`, porque aquela propriedade
+/// responde "sim" o tempo todo: basta um serviço do sistema manter a saída
+/// aberta em silêncio para ela nunca mais voltar a ser falsa.
+func appsPlayingAudio() -> [String] {
+    guard #available(macOS 14.2, *) else { return [] }
+
+    var listAddress = AudioObjectPropertyAddress(
+        mSelector: kAudioHardwarePropertyProcessObjectList,
+        mScope: kAudioObjectPropertyScopeGlobal,
+        mElement: kAudioObjectPropertyElementMain
+    )
+    var dataSize = UInt32(0)
+    guard AudioObjectGetPropertyDataSize(
+        AudioObjectID(kAudioObjectSystemObject), &listAddress, 0, nil, &dataSize
+    ) == noErr, dataSize > 0 else { return [] }
+
+    let count = Int(dataSize) / MemoryLayout<AudioObjectID>.size
+    var processes = [AudioObjectID](repeating: 0, count: count)
+    guard AudioObjectGetPropertyData(
+        AudioObjectID(kAudioObjectSystemObject), &listAddress, 0, nil, &dataSize, &processes
+    ) == noErr else { return [] }
+
+    var playing: [String] = []
+    for process in processes {
+        var runningAddress = AudioObjectPropertyAddress(
+            mSelector: kAudioProcessPropertyIsRunningOutput,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        var running = UInt32(0)
+        var runningSize = UInt32(MemoryLayout<UInt32>.size)
+        guard AudioObjectGetPropertyData(
+            process, &runningAddress, 0, nil, &runningSize, &running
+        ) == noErr, running != 0 else { continue }
+
+        var bundleAddress = AudioObjectPropertyAddress(
+            mSelector: kAudioProcessPropertyBundleID,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        var bundle: CFString = "" as CFString
+        var bundleSize = UInt32(MemoryLayout<CFString>.size)
+        if AudioObjectGetPropertyData(
+            process, &bundleAddress, 0, nil, &bundleSize, &bundle
+        ) == noErr {
+            playing.append(bundle as String)
+        } else {
+            playing.append("desconhecido")
+        }
+    }
+    return playing
+}
+
+func isOutputRunning() -> Bool {
+    return !appsPlayingAudio().isEmpty
+}
+
+/// Envia a tecla de mídia play/pause, a mesma da barra de toque e do teclado.
+/// Funciona com Spotify, Música, YouTube no navegador e qualquer app que
+/// respeite as teclas de mídia, sem precisar conhecer nenhum deles.
+func postPlayPauseKey() {
+    let NX_KEYTYPE_PLAY: Int32 = 16
+    for isDown in [true, false] {
+        let flags = isDown ? 0xa00 : 0xb00
+        let data1 = (Int(NX_KEYTYPE_PLAY) << 16) | (flags << 8)
+        guard let event = NSEvent.otherEvent(
+            with: .systemDefined,
+            location: .zero,
+            modifierFlags: NSEvent.ModifierFlags(rawValue: UInt(flags)),
+            timestamp: 0,
+            windowNumber: 0,
+            context: nil,
+            subtype: 8,
+            data1: data1,
+            data2: -1
+        ) else { continue }
+        event.cgEvent?.post(tap: .cghidEventTap)
+    }
+}
+
+func runAudioStatus() -> Never {
+    emit(["event": "audio", "running": isOutputRunning(), "apps": appsPlayingAudio()])
+    exit(0)
+}
+
+func runMediaPlayPause() -> Never {
+    // Postar tecla de mídia é um evento sintético como qualquer outro.
+    guard AXIsProcessTrusted() else {
+        fail("AX_DENIED", "Permissão de Acessibilidade necessária para controlar a mídia.")
+    }
+    postPlayPauseKey()
+    emit(["event": "media", "sent": true])
+    exit(0)
+}
+
 // MARK: - Contexto e permissões
 
 func runFrontApp() -> Never {
@@ -372,7 +492,7 @@ func runRequestMic() -> Never {
 
 let args = Array(CommandLine.arguments.dropFirst())
 guard let command = args.first else {
-    fail("USAGE", "Uso: vox-helper <record|paste|frontapp|status|request-accessibility|request-mic>")
+    fail("USAGE", "Uso: vox-helper <record|paste|frontapp|status|audio-status|media-play-pause|request-accessibility|request-mic>")
 }
 
 func intFlag(_ name: String, _ fallback: UInt32) -> UInt32 {
@@ -399,6 +519,10 @@ case "paste":
     )
 case "frontapp":
     runFrontApp()
+case "audio-status":
+    runAudioStatus()
+case "media-play-pause":
+    runMediaPlayPause()
 case "status":
     runStatus()
 case "request-accessibility":

@@ -91,6 +91,8 @@ export class Session extends EventEmitter {
   /** Último app que não era o nosso, alvo de reserva para a colagem. */
   private lastExternalApp: FrontApp | null = null;
   private warnedAboutAccessibility = false;
+  /** Suspensão do áudio do sistema, pendente de restauração. */
+  private audioSuspension: Promise<platform.AudioState> | null = null;
 
   readonly whisper: WhisperService;
 
@@ -145,6 +147,10 @@ export class Session extends EventEmitter {
     // porque acontece enquanto o gravador ainda está inicializando.
     const frontPromise = platform.frontApp();
     const recordPromise = platform.startRecording(this.wavPath);
+    // Sai na frente para o som parar antes de o microfone captá-lo. Roda em
+    // paralelo com o gravador, então não custa latência.
+    this.audioSuspension = platform.suspendAudio(config.audioWhileRecording);
+    this.audioSuspension.catch(() => undefined);
     // Uma falha na gravação enquanto esperamos o frontApp não pode virar
     // unhandled rejection. O erro real continua tratado no await lá embaixo.
     recordPromise.catch(() => undefined);
@@ -170,6 +176,7 @@ export class Session extends EventEmitter {
       this.recording = await recordPromise;
       log.info('gravando');
     } catch (error) {
+      void this.restoreAudio();
       overlay.hide();
       this.setState('idle');
       this.reportError(error);
@@ -196,6 +203,9 @@ export class Session extends EventEmitter {
 
     try {
       const { seconds, peak } = await recording.stop();
+      // Devolve o som agora, e não no fim: você apertou parar, a música volta.
+      // Transcrever e colar acontecem depois, em silêncio nenhum.
+      void this.restoreAudio();
       log.info(`gravação: ${seconds.toFixed(2)}s, pico ${peak.toFixed(4)}`);
 
       if (seconds < config.minRecordingSec) throw new SessionError('TOO_SHORT');
@@ -248,6 +258,9 @@ export class Session extends EventEmitter {
       this.setState('idle');
       this.reportError(error);
     } finally {
+      // Rede de segurança: se algo estourou antes do restore acima, o áudio
+      // não pode ficar mudo para sempre.
+      void this.restoreAudio();
       overlay.hide();
       this.cleanupWav();
       this.whisper.scheduleUnload();
@@ -301,6 +314,7 @@ export class Session extends EventEmitter {
   cancel(): void {
     if (this.currentState !== 'recording') return;
     log.info('gravação cancelada');
+    void this.restoreAudio();
     this.clearMaxDurationTimer();
     this.recording?.abort();
     this.recording = null;
@@ -335,6 +349,21 @@ export class Session extends EventEmitter {
     // Ainda nós: usa o último app externo conhecido, ou desiste de forçar o
     // foco e cola onde estiver.
     return this.lastExternalApp;
+  }
+
+  /**
+   * Devolve o áudio do sistema ao estado anterior. Idempotente: pode ser
+   * chamada por vários caminhos de saída sem desfazer duas vezes.
+   */
+  private async restoreAudio(): Promise<void> {
+    const pending = this.audioSuspension;
+    this.audioSuspension = null;
+    if (!pending) return;
+    try {
+      await platform.restoreAudio(await pending);
+    } catch (error) {
+      log.error('falha ao restaurar o áudio do sistema', error);
+    }
   }
 
   private clearMaxDurationTimer(): void {

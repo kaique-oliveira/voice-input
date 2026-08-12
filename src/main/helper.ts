@@ -234,6 +234,10 @@ export async function permissionStatus(): Promise<PermissionStatus> {
   };
 }
 
+export async function mediaPlayPause(): Promise<void> {
+  await runOnce(['media-play-pause'], undefined, 4_000);
+}
+
 export async function requestAccessibility(): Promise<boolean> {
   const event = await runOnce(['request-accessibility'], undefined, 5_000);
   return Boolean(event.trusted);

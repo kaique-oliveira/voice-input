@@ -62,7 +62,7 @@ git -C "$ROOT" diff --quiet 2>/dev/null || BUILD_REF="$BUILD_REF+"
 cat > "$APP_ROOT/package.json" <<JSON
 {
   "name": "voice-input",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "buildRef": "$BUILD_REF",
   "main": "dist/main/index.js"
 }
@@ -76,7 +76,7 @@ set_plist CFBundleName            "$APP_NAME"            string
 set_plist CFBundleDisplayName     "$APP_NAME"            string
 set_plist CFBundleExecutable      "$APP_NAME"            string
 set_plist CFBundleIdentifier      "$BUNDLE_ID"           string
-set_plist CFBundleShortVersionString "0.1.1"             string
+set_plist CFBundleShortVersionString "0.2.0"             string
 set_plist CFBundleVersion         "1"                    string
 set_plist NSMicrophoneUsageDescription \
   "O Voice Input precisa do microfone para transcrever sua fala localmente."   string
