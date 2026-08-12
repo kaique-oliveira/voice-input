@@ -162,6 +162,42 @@ Medido em MacBook Pro M5 com 24 GB.
 
 Os 210 MB em repouso são o piso do Electron, não do código deste projeto.
 
+### Requisitos mínimos e escolha do modelo
+
+Tudo abaixo foi medido, não estimado. Os tempos são para **12 segundos de fala**
+e as porcentagens são de termos técnicos preservados no pipeline completo.
+
+| Modelo | Termos corretos | Com GPU | Só CPU | RAM enquanto transcreve |
+|---|---|---|---|---|
+| `large-v3-turbo` | **93,9%** | 0,73 s | 3,1 s | 830 MB |
+| `small` | **90,9%** | 0,36 s | 1,2 s | 500 MB |
+| `base` | 72,7% | 0,18 s | 0,42 s | 245 MB |
+| `tiny` | 48,5% | 0,16 s | 0,31 s | 185 MB |
+
+O número que mais importa aqui: **`small` com o pipeline ligado (90,9%) fica
+acima do `large-v3-turbo` sem pipeline (69,7%)**. O glossário e o dicionário
+valem mais que o tamanho do modelo, então máquina modesta não significa
+transcrição ruim.
+
+**Mínimo realista:** 4 GB de RAM livre, qualquer processador de 64 bits com
+quatro núcleos, 1 GB de disco. O app inteiro parado ocupa cerca de 210 MB e não
+usa CPU nenhuma.
+
+**Em máquina modesta,** por exemplo um i3 com 8 GB, use o `small`. A coluna
+"só CPU" acima foi medida desligando a GPU, e é a melhor aproximação disponível.
+Um i3 tem núcleos bem mais lentos, então conte com duas a três vezes esses
+tempos: cerca de 3 segundos para transcrever 12 segundos de fala. Continua acima
+do tempo real, ou seja, processar demora menos do que você levou falando.
+
+O `large-v3-turbo` também roda em 8 GB, ocupando 1,2 GB sem GPU, mas os 3,1 s
+medidos viram uns 8 segundos, o que atrapalha o uso contínuo.
+
+**Com placa NVIDIA** em Windows ou Linux, compile o whisper.cpp com CUDA e o
+`large-v3-turbo` volta a ser confortável.
+
+A escolha do modelo fica na tela de Configurações, com o download e o consumo de
+cada um. Trocar não exige reinstalar nada.
+
 ---
 
 ## Modos
