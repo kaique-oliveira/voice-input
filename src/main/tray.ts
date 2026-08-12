@@ -5,6 +5,7 @@ import { loadConfig, saveConfig } from './config';
 import { dictionaryFile } from './paths';
 import { log } from './log';
 import * as helper from './helper';
+import * as platform from './platform';
 import type { Session } from './session';
 
 /**
@@ -58,10 +59,10 @@ function formatElapsed(ms: number): string {
  * permissão de Acessibilidade, não transcrição.
  */
 async function testPaste(): Promise<void> {
-  const front = await helper.frontApp();
+  const front = await platform.frontApp();
   log.info(`teste de colagem → ${front?.name ?? '?'} (${front?.bundleId ?? '?'})`);
   try {
-    await helper.paste('Voice Input funcionando.', {
+    await platform.paste('Voice Input funcionando.', {
       restoreClipboard: true,
       preDelayMs: 90,
       ensureFrontApp: front?.bundleId,

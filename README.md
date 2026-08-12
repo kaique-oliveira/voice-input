@@ -4,11 +4,12 @@
 
 # Voice Input
 
-**Ditado por voz para macOS, 100% local.**
+**Ditado por voz 100% local.** macOS pronto para uso, Windows e Linux experimentais.
 
 Aperte o atalho, fale, aperte de novo. O texto aparece onde o cursor estava.
 
-[![macOS](https://img.shields.io/badge/macOS-Apple%20Silicon-black)](https://github.com/kaique-oliveira/voice-input/releases)
+[![macOS](https://img.shields.io/badge/macOS-pronto-2ea44f)](https://github.com/kaique-oliveira/voice-input/releases)
+[![Windows e Linux](https://img.shields.io/badge/Windows%20e%20Linux-experimental-e8a33d)](#windows-e-linux)
 [![License](https://img.shields.io/badge/license-MIT-e41b22)](LICENSE)
 [![Offline](https://img.shields.io/badge/rede-zero-2ea44f)](#privacidade)
 
@@ -183,14 +184,15 @@ transcrição ruim.
 quatro núcleos, 1 GB de disco. O app inteiro parado ocupa cerca de 210 MB e não
 usa CPU nenhuma.
 
-**Em máquina modesta,** por exemplo um i3 com 8 GB, use o `small`. A coluna
-"só CPU" acima foi medida desligando a GPU, e é a melhor aproximação disponível.
-Um i3 tem núcleos bem mais lentos, então conte com duas a três vezes esses
-tempos: cerca de 3 segundos para transcrever 12 segundos de fala. Continua acima
-do tempo real, ou seja, processar demora menos do que você levou falando.
+**Use o `large-v3-turbo` em qualquer máquina.** Ele é o padrão e não há motivo
+para abrir mão da melhor transcrição. Num i3 com 8 GB ele ocupa 1,2 GB e leva
+algo entre 6 e 9 segundos para 12 segundos de fala, contando que os núcleos de
+um i3 são duas a três vezes mais lentos que os do M5. Continua acima do tempo
+real: processar demora menos do que se levou falando, e o carregamento acontece
+enquanto você ainda fala.
 
-O `large-v3-turbo` também roda em 8 GB, ocupando 1,2 GB sem GPU, mas os 3,1 s
-medidos viram uns 8 segundos, o que atrapalha o uso contínuo.
+Troque para o `small` só se essa espera incomodar no uso contínuo. Ele custa
+3 pontos percentuais de precisão e devolve três vezes a velocidade.
 
 **Com placa NVIDIA** em Windows ou Linux, compile o whisper.cpp com CUDA e o
 `large-v3-turbo` volta a ser confortável.
@@ -311,47 +313,87 @@ Reais, não contornáveis por código:
 
 ## Windows e Linux
 
-Hoje o app roda **apenas em macOS**, e prefiro dizer isso claramente a anunciar
-uma compatibilidade que não foi testada.
+> **Experimental.** O código existe e o build funciona, mas nunca foi executado
+> em Windows nem em Linux pelo autor. Relatos de teste são muito bem-vindos.
 
-A maior parte do projeto já é portátil. O que trava é pequeno e bem delimitado.
+O que muda fora do macOS:
 
-**Funciona em qualquer sistema, sem alteração:**
+| Função | macOS | Windows e Linux |
+|---|---|---|
+| Gravar | helper em Swift | captura pelo Chromium, sem dependência externa |
+| Colar | `⌘V` sintético | `SendKeys` no Windows, `xdotool` no X11 |
+| Detectar o app em foco | NSWorkspace | não implementado, usa o modo padrão |
+| Permissões | Microfone e Acessibilidade | só o pedido de microfone do navegador |
 
-- toda a lógica em TypeScript: máquina de estados, modos, glossário, dicionário,
-  correção, catálogo e download do modelo
-- o whisper.cpp, que compila em Windows e Linux (troque o Metal por CUDA,
-  Vulkan ou CPU no `scripts/setup.sh`)
-- a janela de configurações e o painel flutuante, que são HTML puro
+No **Wayland** a colagem automática não funciona, e isso não é bug: o protocolo
+proíbe um programa qualquer de sintetizar teclas. Use o modo "só copiar", no
+menu do ícone, e cole com `Ctrl+V`.
 
-**Precisa de uma implementação nova:** o `vox-helper`, que é Swift e concentra
-de propósito as três funções que dependem do sistema operacional. Qualquer porte
-só precisa entregar um executável que fale o mesmo protocolo de JSON por linha,
-descrito em [`native/VoxHelper.swift`](native/VoxHelper.swift).
+### Gerar o build
 
-| Função | macOS (hoje) | Windows | Linux |
-|---|---|---|---|
-| Gravar 16 kHz mono | AVAudioEngine | WASAPI, ou `ffmpeg -f dshow` | PipeWire ou `parec` |
-| Colar no app em foco | CGEvent com ⌘V | `SendInput` com Ctrl+V | `xdotool key ctrl+v` no X11, `wtype` no Wayland |
-| Ler o app em foco | NSWorkspace | `GetForegroundWindow` | `xdotool getactivewindow` no X11 |
-| Permissões | TCC | não se aplica | não se aplica |
+Os três passos são iguais nas duas plataformas: dependências, whisper.cpp,
+empacotamento.
 
-Dois avisos para quem for portar:
+**1. Dependências**
 
-1. **Wayland é o ponto difícil.** Por segurança ele não deixa um programa
-   qualquer sintetizar teclas nem descobrir a janela ativa. Em vários ambientes
-   só dá para usar o modo "só copiar", em que o app coloca o texto na área de
-   transferência e você cola.
-2. `src/main/paths.ts` fixa o caminho do macOS. Trocar por
-   `app.getPath('userData')` resolve nas três plataformas, mas move a pasta de
-   dados de quem já usa.
+```bash
+git clone https://github.com/kaique-oliveira/voice-input.git
+cd voice-input
+npm install
+```
 
-O empacotamento também é específico: o `scripts/package.sh` monta um bundle
-`.app` na mão. Para gerar `.exe` ou `.AppImage` o caminho natural é o
-`electron-builder`, que resolve as três plataformas de uma vez.
+Requisitos: Node 20 ou superior, CMake e um compilador C++ (Build Tools do
+Visual Studio no Windows, `build-essential` no Linux).
 
-Contribuições nesse sentido são bem-vindas. Abra uma issue antes de começar,
-para combinarmos o formato do helper.
+No Linux, para a colagem automática funcionar em X11:
+
+```bash
+sudo apt install xdotool     # ou o equivalente na sua distribuição
+```
+
+**2. Compilar o whisper.cpp**
+
+O binário do reconhecedor não vem pronto no repositório, porque depende da sua
+máquina. Compile em `resources/bin`:
+
+```bash
+git clone https://github.com/ggml-org/whisper.cpp .build/whisper.cpp
+cmake -S .build/whisper.cpp -B .build/whisper.cpp/build \
+  -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF -DWHISPER_BUILD_TESTS=OFF
+cmake --build .build/whisper.cpp/build --config Release --target whisper-server whisper-cli
+```
+
+Copie `whisper-server` e `whisper-cli` (com `.exe` no Windows) do diretório de
+build para `resources/bin`.
+
+Com placa NVIDIA, acrescente `-DGGML_CUDA=ON` ao primeiro comando. Faz muita
+diferença: o modelo recomendado sai de alguns segundos para menos de um.
+
+**3. Empacotar**
+
+```bash
+npm run dist:win      # gera instalador NSIS e versão portátil
+npm run dist:linux    # gera AppImage e .deb
+```
+
+O resultado sai em `dist-app/`. Para só rodar sem empacotar, use `npm start`.
+
+**4. Primeira execução**
+
+Abra as Configurações pelo ícone da bandeja e baixe o modelo de transcrição. Se
+a colagem automática não funcionar no seu ambiente, troque para "só copiar" no
+menu do ícone.
+
+### Se quiser ajudar a completar
+
+Falta detectar o app em foco, que é o que faz o modo Developer e o modo Normal
+alternarem sozinhos. As APIs são `GetForegroundWindow` no Windows e
+`xdotool getactivewindow getwindowclassname` no X11. O ponto de extensão é
+`frontApp` em [`src/main/platform.ts`](src/main/platform.ts).
+
+Outro detalhe: `src/main/paths.ts` fixa o caminho de dados do macOS. Trocar por
+`app.getPath('userData')` resolve nas três plataformas, mas move a pasta de quem
+já usa, então precisa de migração.
 
 ---
 

@@ -5,6 +5,7 @@ import { loadDictionary, saveDictionary, DEFAULT_DICTIONARY } from './dictionary
 import { dataDir } from './paths';
 import { MODELS, isInstalled, installedModels, download, cancelDownload } from './model';
 import * as helper from './helper';
+import * as platform from './platform';
 
 /**
  * Janela de configurações: criada sob demanda, destruída ao fechar. Enquanto
@@ -74,7 +75,7 @@ export function registerSettingsIpc(hooks: SettingsHooks): void {
   ipcMain.handle('settings:load', async () => {
     let permissions: helper.PermissionStatus | null = null;
     try {
-      permissions = await helper.permissionStatus();
+      permissions = await platform.permissionStatus();
     } catch {
       // Helper ausente: a UI mostra "desconhecido" em vez de quebrar.
     }
@@ -138,7 +139,7 @@ export function registerSettingsIpc(hooks: SettingsHooks): void {
   // então o selo se atualiza sozinho quando você concede no painel do sistema.
   ipcMain.handle('settings:permissions', async () => {
     try {
-      return await helper.permissionStatus();
+      return await platform.permissionStatus();
     } catch {
       return null;
     }
@@ -146,7 +147,7 @@ export function registerSettingsIpc(hooks: SettingsHooks): void {
 
   ipcMain.handle('settings:request-accessibility', async () => {
     // Quem de fato posta o ⌘V é o vox-helper, então é o status dele que vale.
-    const status = await helper.permissionStatus().catch(() => null);
+    const status = await platform.permissionStatus().catch(() => null);
     if (status?.accessibility) return true;
 
     // O pedido tem de partir do processo principal: é ele que roda dentro do
@@ -157,6 +158,8 @@ export function registerSettingsIpc(hooks: SettingsHooks): void {
     );
     return false;
   });
-  ipcMain.handle('settings:request-microphone', () => helper.requestMicrophone());
+  ipcMain.handle('settings:request-microphone', () =>
+    platform.isMac ? helper.requestMicrophone() : Promise.resolve(true)
+  );
   ipcMain.handle('settings:open-data-dir', () => shell.openPath(dataDir));
 }

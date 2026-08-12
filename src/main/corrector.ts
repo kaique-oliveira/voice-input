@@ -103,6 +103,152 @@ function softenTagQuestions(text: string, protectedWords: Set<string>): string {
   });
 }
 
+/**
+ * Sons que não são palavra em nenhum contexto. Removidos sempre.
+ * "ah" fica de fora: aparece demais em fala legítima ("ah, entendi").
+ */
+const NOISE_WORDS = /(?<![\p{L}\p{N}])(ãh|ahn|hã|hum+|hmm+|uhum|ehm|eh|uh)(?![\p{L}\p{N}])[\s,]*/giu;
+
+/**
+ * Sequências de "é, é, é" e "ah, ah". Só remove quando há repetição, porque
+ * "é" sozinho é o verbo e "ah" sozinho pode ser fala de verdade.
+ */
+const REPEATED_FILLER = /(?<![\p{L}\p{N}])((?:é|ah|ó)\s*,\s*)(?:(?:é|ah|ó)\s*,\s*)+/giu;
+
+/** Repetições legítimas do português, que não são gagueira. */
+const INTENTIONAL_REPEATS = new Set(['que', 'já', 'quase', 'não']);
+
+/** "eu eu tô" vira "eu tô". */
+function collapseStutters(text: string): string {
+  return text.replace(
+    /(?<![\p{L}\p{N}])(\p{L}[\p{L}\p{N}'’-]*)((?:\s*,?\s+)\1)+(?![\p{L}\p{N}])/giu,
+    (match, word: string) => (INTENTIONAL_REPEATS.has(word.toLowerCase()) ? match : word)
+  );
+}
+
+/**
+ * Colapsa trechos repetidos lado a lado.
+ *
+ * É o padrão de quem está pensando enquanto fala: "eu tô pensando, eu tô
+ * pensando, eu tô pensando" vira "eu tô pensando". Compara por forma
+ * normalizada, sem acento de pontuação nem maiúscula, e descarta a cópia da
+ * esquerda para preservar a pontuação que vem depois.
+ *
+ * Trechos de 2 a 6 palavras. Repetição legítima desse tamanho praticamente não
+ * existe na fala, e o separador costuma resolver: em "muito bom, inclusive,
+ * muito bom mesmo" as duas ocorrências não são adjacentes.
+ */
+function collapseRepeatedPhrases(text: string): string {
+  // Uma passada só resolve um nível de repetição. Repetir até estabilizar
+  // limpa "A B A B A" em cadeia, com teto para nunca virar laço infinito.
+  let current = text;
+  for (let round = 0; round < 4; round++) {
+    const next = collapseRepeatedPhrasesOnce(current);
+    if (next === current) break;
+    current = next;
+  }
+  return current;
+}
+
+/**
+ * Marcadores de recomeço: o que se diz ao reiniciar a frase que já se estava
+ * dizendo. A lista é curtíssima de propósito. "inclusive" fica de fora, senão
+ * "muito bom, inclusive, muito bom mesmo" perderia a ênfase que foi intencional.
+ */
+const RESTART_MARKERS = new Set([
+  'na verdade',
+  'tipo',
+  'tipo assim',
+  'assim',
+  'sabe',
+  'então',
+  'aí',
+  'quer dizer',
+]);
+
+function isRestartMarker(normalized: string[], start: number, length: number): boolean {
+  const phrase = normalized.slice(start, start + length).join(' ').trim();
+  return RESTART_MARKERS.has(phrase);
+}
+
+function collapseRepeatedPhrasesOnce(text: string): string {
+  const tokens = text.match(/\S+/g) ?? [];
+  const normalized = tokens.map((token) =>
+    token.toLowerCase().replace(/[^\p{L}\p{N}]/gu, '')
+  );
+  const keep = new Array<boolean>(tokens.length).fill(true);
+
+  let index = 0;
+  while (index < tokens.length) {
+    let collapsed = false;
+    const maxSize = Math.min(6, Math.floor((tokens.length - index) / 2));
+
+    outer: for (let size = maxSize; size >= 2; size--) {
+      // gap 0 é a repetição colada. Os outros cobrem o recomeço de fala:
+      // "se você puder, na verdade, se você puder".
+      for (let gap = 0; gap <= 3; gap++) {
+        if (index + size + gap + size > tokens.length) continue;
+        if (gap > 0 && !isRestartMarker(normalized, index + size, gap)) continue;
+
+        let same = true;
+        for (let offset = 0; offset < size; offset++) {
+          const left = normalized[index + offset];
+          const right = normalized[index + size + gap + offset];
+          if (!left || left !== right) {
+            same = false;
+            break;
+          }
+        }
+        if (!same) continue;
+
+        // Descarta a cópia da esquerda e o marcador de recomeço junto.
+        for (let offset = 0; offset < size + gap; offset++) keep[index + offset] = false;
+        // Reavalia a partir da cópia sobrevivente: assim o terceiro "eu tô
+        // pensando" também colapsa.
+        index += size + gap;
+        collapsed = true;
+        break outer;
+      }
+    }
+
+    if (!collapsed) index++;
+  }
+
+  return tokens.filter((_, position) => keep[position]).join(' ');
+}
+
+/**
+ * Devolve a maiúscula de início de frase perdida ao remover um "Ah," ou "É,".
+ * Termos com grafia própria ficam intactos: "npm install" não vira "Npm".
+ */
+function recapitalize(text: string, protectedWords: Set<string>): string {
+  return text.replace(/(^|[.!?]\s+)(\p{Ll})(\p{L}*)/gu, (match, before, first, rest) => {
+    const word = `${first}${rest}`.toLowerCase();
+    if (protectedWords.has(word)) return match;
+    return `${before}${first.toUpperCase()}${rest}`;
+  });
+}
+
+/**
+ * Remove vícios de fala sem tocar no conteúdo.
+ *
+ * Tudo aqui é subtração: nada é reescrito, invertido ou resumido. As palavras
+ * que sobram são exatamente as que foram ditas, na mesma ordem.
+ */
+function removeDisfluencies(text: string, protectedWords: Set<string>): string {
+  let output = text.replace(REPEATED_FILLER, '').replace(NOISE_WORDS, ' ');
+  output = collapseStutters(output);
+  output = collapseRepeatedPhrases(output);
+  output = output
+    .replace(/\s+/g, ' ')
+    // A remoção deixa buracos de pontuação: ", ," e vírgula solta no começo.
+    .replace(/\s+([,.!?;:])/g, '$1')
+    .replace(/([,;:])(\s*[,;:])+/g, '$1')
+    .replace(/^[\s,;:]+/, '')
+    .trim();
+  return recapitalize(output, protectedWords);
+}
+
 /** Remove repetição consecutiva de frase, laço clássico do decoder. */
 function dedupeLoops(text: string): string {
   const parts = text.split(/(?<=[.!?])\s+/);
@@ -132,7 +278,12 @@ export interface CorrectionResult {
 
 export function correct(
   raw: string,
-  options: { mode: Mode; dictionary: Record<string, string>; useDictionary: boolean }
+  options: {
+    mode: Mode;
+    dictionary: Record<string, string>;
+    useDictionary: boolean;
+    removeDisfluencies?: boolean;
+  }
 ): CorrectionResult {
   let text = tidy(raw);
   if (!text) return { text: '', empty: true };
@@ -147,8 +298,16 @@ export function correct(
   }
 
   // Depois do dicionário: os valores dele são justamente os termos que não
-  // podem ter a inicial rebaixada.
-  text = softenTagQuestions(text, new Set(Object.values(options.dictionary).map((v) => v.toLowerCase())));
+  // podem ter a inicial mexida.
+  const protectedWords = new Set(
+    Object.values(options.dictionary).map((value) => value.toLowerCase())
+  );
+
+  if (options.removeDisfluencies !== false) {
+    text = removeDisfluencies(text, protectedWords);
+  }
+
+  text = softenTagQuestions(text, protectedWords);
 
   // Única liberdade que damos ao modo normal: garantir maiúscula inicial.
   // Nada de reescrever, resumir ou "melhorar" a frase.

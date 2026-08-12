@@ -32,6 +32,11 @@ export interface Config {
   minPeak: number;
   useGlossaryPrompt: boolean;
   useDictionary: boolean;
+  /**
+   * Remover gagueira, som de hesitação e trecho repetido enquanto se pensa.
+   * É subtração pura: nada é reescrito, só sai o que não foi dito de verdade.
+   */
+  removeDisfluencies: boolean;
   /** Aplicar o dicionário técnico também no modo normal (WhatsApp etc). */
   dictionaryInNormalMode: boolean;
   /**
@@ -75,6 +80,7 @@ export const DEFAULT_CONFIG: Config = {
   minPeak: 0.004,
   useGlossaryPrompt: true,
   useDictionary: true,
+  removeDisfluencies: true,
   dictionaryInNormalMode: false,
   insertMode: 'paste',
   restoreClipboard: false,

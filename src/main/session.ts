@@ -10,6 +10,7 @@ import { buildPrompt, termsFromDictionary } from './glossary';
 import { correct } from './corrector';
 import { resolveMode, type FrontApp } from './context';
 import * as helper from './helper';
+import * as platform from './platform';
 import * as overlay from './overlay';
 import { hideSettings } from './settings';
 import { log } from './log';
@@ -57,6 +58,8 @@ const ERROR_MESSAGES: Record<string, string> = {
   WRITE_FAIL: 'Não foi possível gravar o arquivo de áudio temporário.',
   AX_DENIED:
     'Sem permissão de Acessibilidade para colar. O texto está na área de transferência, cole com ⌘V.',
+  PASTE_UNAVAILABLE:
+    'Colagem automática não disponível aqui. O texto está na área de transferência, cole com Ctrl+V.',
   PASTE_FAILED:
     'Não consegui colar neste app. O texto está na área de transferência, cole com ⌘V.',
   EMPTY_TEXT: 'Nada para colar.',
@@ -140,8 +143,8 @@ export class Session extends EventEmitter {
 
     // Os dois processos sobem juntos: ler o app em foco não custa latência
     // porque acontece enquanto o gravador ainda está inicializando.
-    const frontPromise = helper.frontApp();
-    const recordPromise = helper.startRecording(this.wavPath);
+    const frontPromise = platform.frontApp();
+    const recordPromise = platform.startRecording(this.wavPath);
     // Uma falha na gravação enquanto esperamos o frontApp não pode virar
     // unhandled rejection. O erro real continua tratado no await lá embaixo.
     recordPromise.catch(() => undefined);
@@ -217,7 +220,12 @@ export class Session extends EventEmitter {
       this.setState('correcting');
       const useDictionary =
         config.useDictionary && (mode === 'developer' || config.dictionaryInNormalMode);
-      const result = correct(raw, { mode, dictionary, useDictionary });
+      const result = correct(raw, {
+        mode,
+        dictionary,
+        useDictionary,
+        removeDisfluencies: config.removeDisfluencies,
+      });
       if (result.empty) throw new SessionError('EMPTY_AUDIO');
 
       this.setState('pasting');
@@ -268,7 +276,7 @@ export class Session extends EventEmitter {
     }
 
     try {
-      const result = await helper.paste(text, {
+      const result = await platform.paste(text, {
         restoreClipboard: config.restoreClipboard,
         preDelayMs: config.pasteDelayMs,
         // Devolve o foco ao app de origem caso o overlay ou outra coisa o
@@ -319,7 +327,7 @@ export class Session extends EventEmitter {
     app.hide();
     await new Promise((resolve) => setTimeout(resolve, 180));
 
-    const retry = await helper.frontApp();
+    const retry = await platform.frontApp();
     if (retry && retry.bundleId && !SELF_BUNDLE_IDS.has(retry.bundleId)) {
       this.lastExternalApp = retry;
       return retry;

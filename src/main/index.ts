@@ -7,7 +7,8 @@ import { openSettings, registerSettingsIpc } from './settings';
 import { registerOverlayIpc } from './overlay';
 import { log } from './log';
 import { isInstalled } from './model';
-import * as helper from './helper';
+
+import * as platform from './platform';
 
 /**
  * Voice Input: ditado local por voz para macOS.
@@ -106,18 +107,22 @@ app.whenReady().then(() => {
 
   // Permissão faltando vira aviso, não janela: a de Configurações só abre
   // quando você pede. Uma janela aparecendo sozinha no boot é intrusiva.
-  void helper
+  void platform
     .permissionStatus()
     .then((status) => {
+      // isTrustedAccessibilityClient só existe no macOS.
+      const mainTrusted = platform.isMac
+        ? systemPreferences.isTrustedAccessibilityClient(false)
+        : 'n/a';
       log.info(
-        `permissões: microfone=${status.microphone} acessibilidade=${status.accessibility} ` +
-          `(processo principal: ${systemPreferences.isTrustedAccessibilityClient(false)})`
+        `plataforma: ${process.platform} · permissões: microfone=${status.microphone} ` +
+          `acessibilidade=${status.accessibility} (processo principal: ${mainTrusted})`
       );
 
       const config = loadConfig();
       const missing: string[] = [];
       if (status.microphone !== 'authorized') missing.push('permissão de Microfone');
-      if (!status.accessibility && config.insertMode === 'paste') {
+      if (platform.isMac && !status.accessibility && config.insertMode === 'paste') {
         missing.push('permissão de Acessibilidade');
       }
       if (!isInstalled(config.model)) missing.push('o modelo de transcrição');

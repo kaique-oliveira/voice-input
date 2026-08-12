@@ -13,6 +13,7 @@ const FIELDS = [
   ['insertMode', 'value'],
   ['useGlossaryPrompt', 'checked'],
   ['useDictionary', 'checked'],
+  ['removeDisfluencies', 'checked'],
   ['dictionaryInNormalMode', 'checked'],
   ['restoreClipboard', 'checked'],
   ['playSounds', 'checked'],

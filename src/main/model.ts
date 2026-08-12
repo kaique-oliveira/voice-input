@@ -26,10 +26,12 @@ const HUGGING_FACE = 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main'
  * Catálogo em ordem de capacidade.
  *
  * As porcentagens vêm do `npm run bench` rodado neste projeto e medem termos
- * técnicos preservados no pipeline completo, com glossário e dicionário. Vale
- * reparar que o `small` com pipeline (90,9%) fica acima do `large-v3-turbo`
- * sem pipeline (69,7%): em máquina modesta, o modelo menor com as correções
- * ligadas rende mais que o modelo grande sozinho.
+ * técnicos preservados no pipeline completo, com glossário e dicionário.
+ *
+ * O `large-v3-turbo` é o padrão em qualquer máquina: mesmo sem GPU ele fica
+ * acima do tempo real, ou seja, transcrever demora menos do que se levou
+ * falando. Os menores existem para quem achar a espera longa demais, não
+ * porque o hardware "não aguenta".
  */
 export const MODELS: ModelInfo[] = [
   {
@@ -37,21 +39,21 @@ export const MODELS: ModelInfo[] = [
     label: 'large-v3-turbo q5_0',
     bytes: 574_041_195,
     url: `${HUGGING_FACE}/ggml-large-v3-turbo-q5_0.bin`,
-    note: 'Recomendado. 93,9% dos termos técnicos, 830 MB de RAM. Peça um chip com GPU decente.',
+    note: 'Recomendado, inclusive em máquina modesta. 93,9% dos termos técnicos, 830 MB de RAM.',
   },
   {
     file: 'ggml-small-q5_1.bin',
     label: 'small q5_1',
     bytes: 190_085_487,
     url: `${HUGGING_FACE}/ggml-small-q5_1.bin`,
-    note: 'Para máquinas modestas. 90,9% dos termos, 500 MB de RAM, três vezes mais rápido.',
+    note: 'Alternativa se o turbo ficar lento demais. 90,9% dos termos, 500 MB, três vezes mais rápido.',
   },
   {
     file: 'ggml-base-q5_1.bin',
     label: 'base q5_1',
     bytes: 59_707_625,
     url: `${HUGGING_FACE}/ggml-base-q5_1.bin`,
-    note: 'Para hardware fraco. 72,7% dos termos, 245 MB de RAM.',
+    note: 'Só para hardware bem fraco. 72,7% dos termos, 245 MB de RAM.',
   },
   {
     file: 'ggml-tiny-q5_1.bin',
