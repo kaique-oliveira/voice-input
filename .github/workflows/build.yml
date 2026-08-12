@@ -1,0 +1,122 @@
+name: Build Windows e Linux
+
+# Existe porque o autor só tem um Mac. Os runners do GitHub compilam o
+# whisper.cpp e empacotam o app nas outras duas plataformas, o que ao menos
+# garante que o código compila e empacota nelas.
+#
+# O build de macOS fica de fora de propósito: ele é assinado com um certificado
+# que vive no keychain do autor, e sem essa assinatura as permissões do sistema
+# se perdem a cada atualização. Ver scripts/package.sh.
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Anexar os builds a esta release (ex.: v0.2.0). Vazio: só gera artefatos.'
+        required: false
+        default: ''
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: ${{ matrix.label }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      # Uma plataforma quebrada não impede a outra de produzir o build.
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            label: Linux
+            script: dist:linux
+          - os: windows-latest
+            label: Windows
+            script: dist:win
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      # O binário do reconhecedor não vem no repositório: depende da plataforma.
+      # Sem CUDA, porque os runners não têm GPU. Quem tiver placa NVIDIA compila
+      # localmente com -DGGML_CUDA=ON e ganha muita velocidade.
+      - name: Clonar whisper.cpp
+        run: git clone --depth 1 https://github.com/ggml-org/whisper.cpp.git .build/whisper.cpp
+
+      - name: Compilar whisper.cpp
+        run: |
+          cmake -S .build/whisper.cpp -B .build/whisper.cpp/build -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF -DWHISPER_BUILD_TESTS=OFF -DWHISPER_BUILD_EXAMPLES=ON
+          cmake --build .build/whisper.cpp/build --config Release --target whisper-server whisper-cli
+
+      - name: Reunir os binários (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          mkdir -p resources/bin
+          find .build/whisper.cpp/build -name 'whisper-server' -type f -perm -u+x -exec cp {} resources/bin/ \;
+          find .build/whisper.cpp/build -name 'whisper-cli' -type f -perm -u+x -exec cp {} resources/bin/ \;
+          chmod +x resources/bin/*
+          test -x resources/bin/whisper-server
+          ls -la resources/bin
+
+      - name: Reunir os binários (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path resources/bin | Out-Null
+          Get-ChildItem -Path .build/whisper.cpp/build -Recurse -Include whisper-server.exe, whisper-cli.exe |
+            ForEach-Object { Copy-Item $_.FullName resources/bin/ -Force }
+          if (-not (Test-Path resources/bin/whisper-server.exe)) { throw 'whisper-server.exe não foi produzido' }
+          Get-ChildItem resources/bin
+
+      # Mesmo carimbo que o package.sh faz no macOS: o menu mostra qual commit
+      # está rodando, para ninguém precisar adivinhar qual build é qual.
+      - name: Carimbar o commit no build
+        shell: bash
+        run: |
+          node -e "
+            const fs = require('fs');
+            const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+            pkg.buildRef = process.env.GITHUB_SHA.slice(0, 7);
+            fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2));
+          "
+
+      - name: Empacotar
+        run: npm run ${{ matrix.script }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: voice-input-${{ matrix.label }}
+          if-no-files-found: error
+          path: |
+            dist-app/*.AppImage
+            dist-app/*.deb
+            dist-app/*.exe
+
+      - name: Anexar à release
+        if: startsWith(github.ref, 'refs/tags/') || github.event.inputs.release_tag != ''
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${{ github.event.inputs.release_tag }}"
+          if [ -z "$TAG" ]; then TAG="${GITHUB_REF_NAME}"; fi
+          # nullglob para o padrão que não casar sumir em vez de virar literal.
+          shopt -s nullglob
+          FILES=(dist-app/*.AppImage dist-app/*.deb dist-app/*.exe)
+          if [ ${#FILES[@]} -eq 0 ]; then
+            echo "Nenhum instalador produzido" >&2
+            exit 1
+          fi
+          printf 'anexando a %s:\n' "$TAG"
+          printf '  %s\n' "${FILES[@]}"
+          gh release upload "$TAG" "${FILES[@]}" --clobber

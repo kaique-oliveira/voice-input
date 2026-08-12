@@ -2,7 +2,7 @@
   "name": "voice-input",
   "version": "0.2.0",
   "private": true,
-  "description": "Ditado local por voz para macOS — Whisper.cpp + Electron, 100% offline",
+  "description": "Ditado por voz 100% local, focado em termos técnicos",
   "main": "dist/main/index.js",
   "scripts": {
     "setup": "bash scripts/setup.sh",
@@ -62,7 +62,15 @@
         "deb"
       ],
       "icon": "public/logo.png",
-      "category": "Utility"
+      "category": "Utility",
+      "maintainer": "Kaique Oliveira",
+      "synopsis": "Ditado por voz 100% local"
     }
-  }
+  },
+  "author": {
+    "name": "Kaique Oliveira",
+    "email": "19419231+kaique-oliveira@users.noreply.github.com"
+  },
+  "homepage": "https://github.com/kaique-oliveira/voice-input",
+  "license": "MIT"
 }
