@@ -16,6 +16,8 @@ contextBridge.exposeInMainWorld('api', {
   downloadModel: (file: string) => ipcRenderer.invoke('model:download', file),
   cancelModelDownload: () => ipcRenderer.invoke('model:cancel'),
   previewSound: (sound: string) => ipcRenderer.invoke('sound:preview', sound),
+  unusedModels: () => ipcRenderer.invoke('model:unused'),
+  removeUnusedModels: () => ipcRenderer.invoke('model:remove-unused'),
   onModelProgress: (
     handler: (progress: { file: string; received: number; total: number }) => void
   ) => {

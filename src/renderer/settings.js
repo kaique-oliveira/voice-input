@@ -138,7 +138,24 @@ async function refresh() {
   }
 
   applyPermissions(permissions);
+  void renderUnused();
 }
+
+/** Modelos no disco que a configuração de hoje não usa. */
+async function renderUnused() {
+  const unused = await window.api.unusedModels();
+  const bytes = unused.reduce((sum, entry) => sum + entry.bytes, 0);
+  $('unused-label').textContent = unused.length
+    ? `${unused.length} não usado${unused.length > 1 ? 's' : ''}, ${formatBytes(bytes)}`
+    : 'Nada sobrando';
+  $('unused-remove').hidden = unused.length === 0;
+}
+
+$('unused-remove').addEventListener('click', async () => {
+  const result = await window.api.removeUnusedModels();
+  $('unused-label').textContent = `${formatBytes(result.bytes)} liberados`;
+  $('unused-remove').hidden = true;
+});
 
 let polishModelFile = '';
 

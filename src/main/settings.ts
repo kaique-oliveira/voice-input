@@ -4,7 +4,10 @@ import { spawn } from 'node:child_process';
 import { loadConfig, saveConfig, DEFAULT_CONFIG, type Config } from './config';
 import { loadDictionary, saveDictionary, DEFAULT_DICTIONARY } from './dictionary';
 import { dataDir } from './paths';
-import { MODELS, POLISH_MODELS, isInstalled, installedModels, download, cancelDownload } from './model';
+import {
+  MODELS, POLISH_MODELS, isInstalled, installedModels, download, cancelDownload,
+  unusedModels, removeModel,
+} from './model';
 import * as helper from './helper';
 import * as platform from './platform';
 
@@ -105,6 +108,24 @@ export function registerSettingsIpc(hooks: SettingsHooks): void {
   });
 
   ipcMain.handle('model:cancel', () => cancelDownload());
+
+  // Trocar de modelo não apaga o antigo, e são gigabytes numa pasta que
+  // ninguém abre. A janela mostra o que sobrou; apagar continua sendo um
+  // clique seu.
+  ipcMain.handle('model:unused', () => {
+    const config = loadConfig();
+    return unusedModels([config.model, config.polishModel]);
+  });
+
+  ipcMain.handle('model:remove-unused', () => {
+    const config = loadConfig();
+    const removed = unusedModels([config.model, config.polishModel])
+      .filter((entry) => removeModel(entry.file));
+    return {
+      count: removed.length,
+      bytes: removed.reduce((sum, entry) => sum + entry.bytes, 0),
+    };
+  });
 
   // Escolher som pelo nome é adivinhação. Toca na hora, você decide ouvindo.
   ipcMain.handle('sound:preview', (_event, sound: string) => {

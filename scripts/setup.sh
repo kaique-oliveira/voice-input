@@ -3,7 +3,7 @@
 # Setup único do Voice Input.
 #   1. compila o whisper.cpp (estático, Metal) em resources/bin
 #   2. compila o vox-helper (Swift)
-#   3. baixa o modelo de transcrição para ~/Library/Application Support/VoiceInput/models
+#   3. baixa os modelos em uso para ~/Library/Application Support/VoiceInput/models
 #   4. injeta NSMicrophoneUsageDescription no Electron.app de desenvolvimento
 #
 # Esta é a ÚNICA parte do projeto que usa a rede.
@@ -21,6 +21,11 @@ WHISPER_REF="${WHISPER_REF:-master}"
 
 MODEL_FILE="${MODEL_FILE:-ggml-large-v3-turbo-q5_0.bin}"
 MODEL_URL="https://huggingface.co/ggerganov/whisper.cpp/resolve/main/$MODEL_FILE"
+
+# Segundo estágio: pontua e capitaliza. Sem ele o app funciona, só não põe
+# maiúscula em nome próprio.
+POLISH_FILE="${POLISH_FILE:-Qwen3-1.7B-Q4_K_M.gguf}"
+POLISH_URL="https://huggingface.co/ggml-org/Qwen3-1.7B-GGUF/resolve/main/$POLISH_FILE"
 
 say() { printf "\033[1;36m==>\033[0m %s\n" "$*"; }
 warn() { printf "\033[1;33m!!\033[0m %s\n" "$*"; }
@@ -117,6 +122,14 @@ if [ ! -f "$MODELS_DIR/$MODEL_FILE" ]; then
   mv "$MODELS_DIR/$MODEL_FILE.part" "$MODELS_DIR/$MODEL_FILE"
 else
   say "Modelo já presente: $MODEL_FILE"
+fi
+
+if [ ! -f "$MODELS_DIR/$POLISH_FILE" ]; then
+  say "Baixando modelo do segundo estágio $POLISH_FILE (~1,2 GB)"
+  curl -fL --progress-bar -o "$MODELS_DIR/$POLISH_FILE.part" "$POLISH_URL"
+  mv "$MODELS_DIR/$POLISH_FILE.part" "$MODELS_DIR/$POLISH_FILE"
+else
+  say "Modelo do segundo estágio já presente: $POLISH_FILE"
 fi
 
 # ---------------------------------------------------------------- Info.plist do Electron (dev)

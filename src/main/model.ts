@@ -5,11 +5,16 @@ import { modelPath, modelsDir } from './paths';
 import { log } from './log';
 
 /**
- * Download do modelo de transcrição.
+ * Download dos modelos.
  *
  * Existe para quem instala o app pronto: o binário não carrega os 575 MB do
  * modelo junto, então a primeira execução busca o arquivo. É a única vez que
- * o app usa a rede, e só quando você manda.
+ * o app usa a rede.
+ *
+ * A busca é automática desde que o app aprendeu a lição de uma conta nova de
+ * macOS: a pasta de modelos é por usuário, então migrar de conta deixava o app
+ * mudo, gravando e falhando na hora de transcrever, com o motivo só no log.
+ * Baixar sozinho o que a configuração pede resolve na origem.
  */
 
 export interface ModelInfo {
@@ -114,6 +119,38 @@ export function installedModels(): string[] {
   }
 }
 
+/**
+ * Arquivos de modelo no disco que configuração nenhuma aponta.
+ *
+ * Trocar de modelo não apaga o anterior, e é assim que 2 GB de peso morto
+ * ficam esquecidos numa pasta que ninguém visita. Aqui só listamos: apagar é
+ * decisão de quem está lendo a lista.
+ */
+export function unusedModels(inUse: Iterable<string>): Array<{ file: string; bytes: number }> {
+  const keep = new Set(inUse);
+  try {
+    return fs
+      .readdirSync(modelsDir)
+      .filter((name) => /\.(bin|gguf)$/.test(name) && !keep.has(name))
+      .map((file) => ({ file, bytes: fs.statSync(modelPath(file)).size }))
+      .sort((a, b) => b.bytes - a.bytes);
+  } catch {
+    return [];
+  }
+}
+
+/** Apaga por nome, e só dentro da pasta de modelos: nada de caminho relativo. */
+export function removeModel(file: string): boolean {
+  if (file.includes('/') || file.includes('..')) return false;
+  try {
+    fs.unlinkSync(modelPath(file));
+    log.info(`modelo removido: ${file}`);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export interface DownloadProgress {
   file: string;
   received: number;
@@ -184,5 +221,28 @@ export async function download(
     throw error;
   } finally {
     active = null;
+  }
+}
+
+/**
+ * Garante no disco todo modelo que a configuração usa, baixando o que faltar.
+ *
+ * Um de cada vez, porque `download` só admite um em andamento. Nada aqui
+ * lança: sem rede, o app continua servindo, e quem faltar aparece na janela de
+ * Configurações com o botão de baixar.
+ */
+export async function ensureModels(
+  files: string[],
+  onProgress: (progress: DownloadProgress) => void
+): Promise<void> {
+  for (const file of files) {
+    if (!file || isInstalled(file) || !findModel(file)) continue;
+    if (isDownloading()) return;
+    try {
+      log.info(`modelo ${file} não está no disco, baixando`);
+      await download(file, onProgress);
+    } catch {
+      // Já registrado por `download`. O próximo da fila ainda merece a chance.
+    }
   }
 }

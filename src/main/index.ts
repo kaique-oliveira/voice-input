@@ -6,7 +6,7 @@ import { TrayController, formatAccelerator } from './tray';
 import { openSettings, registerSettingsIpc } from './settings';
 import { registerOverlayIpc } from './overlay';
 import { log } from './log';
-import { isInstalled } from './model';
+import { ensureModels, isInstalled } from './model';
 
 import * as platform from './platform';
 
@@ -37,6 +37,39 @@ function applyLoginItem(enabled: boolean): void {
     app.setLoginItemSettings({ openAtLogin: enabled });
   } catch {
     // Sem "abrir ao fazer login" em dev: irrelevante para o funcionamento.
+  }
+}
+
+
+/**
+ * Busca em segundo plano o que faltar, sem travar nada e sem pedir permissão:
+ * é download do que a sua própria configuração já escolheu.
+ */
+async function fetchModels(config: Config): Promise<void> {
+  const wanted = [config.model];
+  if (config.polish) wanted.push(config.polishModel);
+  const missing = wanted.filter((file) => file && !isInstalled(file));
+  if (missing.length === 0) return;
+
+  new Notification({
+    title: 'Voice Input',
+    body: 'Baixando o modelo, uma vez só. Dá para usar assim que terminar.',
+  }).show();
+
+  let announced = 0;
+  await ensureModels(missing, ({ file, received, total }) => {
+    // O log é o único lugar onde isso aparece enquanto a janela está fechada.
+    const percent = total ? Math.floor((received / total) * 100) : 0;
+    if (percent >= announced + 25) {
+      announced = percent;
+      log.info(`${file}: ${percent}%`);
+    }
+  });
+
+  const pending = wanted.filter((file) => file && !isInstalled(file));
+  if (pending.length === 0) {
+    log.info('todos os modelos em uso estão instalados');
+    new Notification({ title: 'Voice Input', body: 'Modelo pronto. Pode ditar.' }).show();
   }
 }
 
@@ -105,6 +138,11 @@ app.whenReady().then(() => {
   registerShortcut(config);
   applyLoginItem(config.launchAtLogin);
 
+  // Os modelos que a configuração usa são buscados sozinhos, em segundo plano.
+  // É o que faltava para instalar numa conta nova de macOS e sair ditando: a
+  // pasta de modelos é por usuário, e antes o app só reclamava no log.
+  void fetchModels(config);
+
   // Permissão faltando vira aviso, não janela: a de Configurações só abre
   // quando você pede. Uma janela aparecendo sozinha no boot é intrusiva.
   void platform
@@ -125,7 +163,7 @@ app.whenReady().then(() => {
       if (platform.isMac && !status.accessibility && config.insertMode === 'paste') {
         missing.push('permissão de Acessibilidade');
       }
-      if (!isInstalled(config.model)) missing.push('o modelo de transcrição');
+      // O modelo não entra nesta lista: ele já está sendo buscado sozinho.
       if (missing.length === 0) return;
 
       new Notification({
