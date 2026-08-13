@@ -1,6 +1,6 @@
 {
   "name": "voice-input",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
   "description": "Ditado por voz 100% local, focado em termos técnicos",
   "main": "dist/main/index.js",
