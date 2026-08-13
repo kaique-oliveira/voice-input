@@ -47,11 +47,15 @@ descompacte e arraste `Voice Input.app` para a pasta Aplicativos.
 Como o app não é notarizado pela Apple, a primeira abertura precisa ser com
 **clique direito no app, depois Abrir**.
 
-Na primeira execução, abra as Configurações pelo menu do ícone e faça três coisas:
+Na primeira execução ele baixa sozinho os modelos que usa, em segundo plano,
+e avisa quando termina. São 1,7 GB no total, uma vez só. Restam duas coisas
+para você, nas Configurações pelo menu do ícone:
 
-1. Baixe o modelo de transcrição (575 MB, uma vez só).
-2. Conceda a permissão de Microfone.
-3. Conceda a permissão de Acessibilidade, necessária para colar sozinho.
+1. Conceda a permissão de Microfone.
+2. Conceda a permissão de Acessibilidade, necessária para colar sozinho.
+
+A pasta de modelos é por usuário do macOS. Se você usa mais de uma conta, cada
+uma baixa a sua na primeira abertura.
 
 ### Opção 2: compilar do código
 
@@ -59,13 +63,21 @@ Na primeira execução, abra as Configurações pelo menu do ícone e faça trê
 git clone https://github.com/kaique-oliveira/voice-input.git
 cd voice-input
 npm install
-npm run setup     # compila o whisper.cpp, o helper Swift e baixa o modelo
+npm run setup     # compila whisper.cpp e llama.cpp, o helper Swift e baixa os modelos
 npm run package   # monta o Voice Input.app
 cp -R "dist-app/Voice Input.app" /Applications/
 ```
 
 Requisitos: macOS com Apple Silicon, Node 20 ou superior, CMake e as Command
 Line Tools do Xcode.
+
+**Assine com uma identidade estável.** O macOS autoriza Microfone e
+Acessibilidade pela assinatura, não pelo caminho do app: com assinatura ad-hoc
+o selo muda a cada build e o sistema passa a negar a permissão mesmo com o
+interruptor ligado no painel, sem dizer por quê. Veja o que você tem com
+`security find-identity -p codesigning -v` e grave o nome escolhido em
+`.signing-identity`, na raiz do projeto (o arquivo é ignorado pelo git). A
+partir daí a permissão sobrevive a qualquer rebuild.
 
 ---
 
@@ -113,7 +125,7 @@ Quatro peças, cada uma com um trabalho:
 | Electron e TypeScript | atalho, menu, máquina de estados | sempre |
 | `vox-helper` (Swift) | grava, cola, lê o app em foco | milissegundos por comando |
 | `whisper-server` (C++ com Metal) | transcrição | sob demanda, morre após 5 min ocioso |
-| `llama-server` (C++ com Metal) | estrutura da frase | sob demanda, morre após 5 min ocioso |
+| `llama-server` (C++ com Metal) | pontuação e maiúscula | sob demanda, morre após 5 min ocioso |
 | Correção | glossário e dicionário | é código puro, não é processo |
 
 ### Decisões de arquitetura
@@ -132,40 +144,46 @@ equivalente. De quebra, é binário estático: nenhum Python no projeto.
 | Mais dicionário determinístico | **93,9%** | 693 ms |
 
 Grafia de termo técnico se resolve com glossário e dicionário, que custam
-milissegundos. O modelo de linguagem só entra no que sobra, que é estrutura de
-frase, e por isso é a última camada e não a primeira.
+milissegundos. O modelo de linguagem só entra no que sobra, que é pontuação e
+maiúscula de nome próprio, e por isso é a última camada e não a primeira.
 
-**O segundo estágio nunca decide sozinho.** Ele resolve um problema que nenhum
-reconhecedor resolve: quando você começa uma frase, se interrompe e recomeça de
-outro jeito, a transcrição fiel fica embaralhada.
+**O segundo estágio faz uma coisa só: pontuação e maiúscula.** Já fez mais, e
+o histórico vale como decisão de projeto. A versão anterior pedia a um Gemma 3
+de 4B que desembaraçasse frase reformulada no meio, o que é interpretar
+intenção. Medido em uso real, aquilo custava de 6 a 15 segundos por ditado e
+devolveu saída vazia em **toda** tentativa registrada no log: cobrava caro e
+não entregava nada.
+
+Escopo reduzido, modelo reduzido. Três candidatos foram medidos no pipeline
+real:
+
+| Modelo | Carga | Resposta | Trocou palavra? |
+|---|---|---|---|
+| **Qwen3 1.7B** | 524 ms | **267 ms** | não, em nenhum caso |
+| Gemma 3 1B | 627 ms | 191 ms | sim: `commita`→`commite`, `eu`→`você` |
+| Gemma 3 4B | 716 ms | 12.101 ms | devolvia vazio |
+
+O que ele ganha é o que regex nenhuma alcança, nome próprio:
 
 ```
-- Então eu queria que ele, na verdade, o que eu quero é que ele entenda melhor
-  o tom, sabe, tipo assim, quando eu me perco no meio da frase, ah, não, é
-  isso, ele acaba escrevendo uma coisa sem pé nem cabeça.
+- fala pro gustavo que a gente vai subir isso na sexta e que o joão já revisou
++ Fala pro Gustavo que a gente vai subir isso na sexta e que o João já revisou
 
-+ O que eu quero é que ele entenda melhor o tom. Quando eu me perco no meio da
-  frase, ele acaba escrevendo uma coisa sem pé nem cabeça.
+- o relatório pro pedro antes da reunião com o pessoal de são paulo
++ o relatório pro Pedro antes da reunião com o pessoal de São Paulo
 ```
 
-O risco é conhecido: modelo de linguagem adora reescrever. Então nada é
-confiado a ele. Toda saída passa por três conferências, todas verificáveis sem
-modelo nenhum:
+**A conferência é uma pergunta só: as palavras são as mesmas, na mesma ordem?**
+Antes eram três, com limiar: 18% de palavras novas, 72% de conteúdo preservado,
+70% do último terço. Aqueles limiares existiam porque o modelo tinha licença
+para apagar hesitação. Sem essa licença, limiar vira brecha — trocar "eu" por
+"você" num texto de 17 palavras dá 6% de palavras novas e passava batido. Foi
+exatamente o que o Gemma 1B fez no teste, e passou.
 
-1. **inventou palavra?** acima de 18% de palavras novas, descarta
-2. **apagou conteúdo?** abaixo de 72% preservado, ou 70% do último terço,
-   descarta
-3. **perdeu termo técnico?** descarta
-
-Qualquer reprovação devolve o texto da etapa anterior. O pior caso desta camada
-é não melhorar, nunca é virar outra coisa. Nos testes ela pegou o modelo
-trocando "commita" por "comite" e engolindo o final de uma fala.
-
-Ela vem **desligada** por padrão, e não por acaso: são segundos em cima de cada
-ditado, e a conferência acima descarta boa parte do que o modelo devolve, então
-no uso comum você paga a espera sem levar a melhora. Repetição e hesitação, que
-é o que de fato aparece, a camada determinística já resolve de graça. Ligue nas
-Configurações se o seu caso for o de reformular frase no meio.
+Agora a sequência inteira é comparada, ignorando acento, maiúscula e
+pontuação, que é justamente o que o modelo tem permissão de mudar. Qualquer
+diferença descarta o polimento e devolve o texto da etapa anterior. O pior caso
+desta camada é não melhorar; nunca é virar outra coisa.
 
 **Pontuação de conversa.** O Whisper pontua fala como prosa de livro: cada
 respiro vira ponto final, e a palavra seguinte vem com maiúscula. Só que o
@@ -211,7 +229,8 @@ Medido em MacBook Pro M5 com 24 GB.
 | Carregar o modelo, a frio | 6,6 s, escondido atrás da gravação |
 | Carregar o modelo, a quente | 0,2 s |
 | Transcrever 12 s de fala | 570 ms |
-| Do fim da fala ao texto colado | **menos de 1 s** com o modelo quente |
+| Segundo estágio (pontuação e maiúscula) | 267 ms de mediana |
+| Do fim da fala ao texto colado | **menos de 1 s** com os modelos quentes |
 
 Os 210 MB em repouso são o piso do Electron, não do código deste projeto.
 
@@ -233,7 +252,7 @@ valem mais que o tamanho do modelo, então máquina modesta não significa
 transcrição ruim.
 
 **Mínimo realista:** 4 GB de RAM livre, qualquer processador de 64 bits com
-quatro núcleos, 1 GB de disco. O app inteiro parado ocupa cerca de 210 MB e não
+quatro núcleos, 2 GB de disco para os dois modelos. O app inteiro parado ocupa cerca de 210 MB e não
 usa CPU nenhuma.
 
 **Use o `large-v3-turbo` em qualquer máquina.** Ele é o padrão e não há motivo
@@ -318,13 +337,22 @@ os que faltaram.
 | `threads` | `6` | threads do whisper |
 | `keepModelWarmMs` | `300000` | quanto o modelo fica em RAM sem uso |
 | `mode` | `auto` | `auto`, `developer` ou `normal` |
-| `polish` | `false` | segundo estágio que desembaraça a estrutura da fala; custa segundos, ligue se quiser |
+| `polish` | `true` | segundo estágio, que pontua e capitaliza; ~280 ms |
+| `polishModel` | `Qwen3-1.7B-Q4_K_M.gguf` | modelo do segundo estágio |
 | `conversationalPunctuation` | `true` | ponto final vira vírgula e o texto não termina em ponto |
 | `insertMode` | `paste` | `paste` cola com ⌘V, `clipboard` só copia |
 | `audioWhileRecording` | `pause` | `pause` pausa e silencia, `mute` só silencia, `off` não mexe |
 | `restoreClipboard` | `false` | ligado devolve o clipboard anterior, desligado deixa a transcrição como reserva |
 | `minPeak` | `0.004` | abaixo disso considera silêncio |
 | `maxRecordingSec` | `300` | corta sozinho se você esquecer de parar |
+| `soundStart` | `Tink` | som ao começar a gravar |
+| `soundPasted` | `Glass` | som quando colou no app |
+| `soundClipboard` | `Pop` | som quando o texto ficou na área de transferência |
+| `soundError` | `Basso` | som quando não saiu texto nenhum |
+
+Qualquer nome de `/System/Library/Sounds` serve nos quatro sons, e as
+Configurações tocam o som ao trocar o seletor: escolher pelo nome é
+adivinhação.
 
 ---
 
@@ -333,8 +361,14 @@ os que faltaram.
 O áudio existe apenas entre a fala e a transcrição, num arquivo temporário
 apagado logo em seguida. O log registra durações e tamanhos, nunca o texto.
 
-A rede é usada em exatamente um lugar: o download do modelo, no Hugging Face,
-quando você clica no botão. Depois disso o app funciona sem internet.
+A rede é usada em exatamente um lugar: o download dos modelos, no Hugging Face,
+na primeira abertura. Depois disso o app funciona sem internet, e nada mais é
+enviado ou consultado. Se preferir controlar a hora, desligue o segundo estágio
+antes de abrir, ou rode o `setup.sh`, que baixa os mesmos arquivos.
+
+Modelo baixado não é apagado ao trocar de modelo, então as Configurações
+mostram o que sobrou em disco, com o total, e um botão para apagar. O que está
+em uso nunca entra nessa lista.
 
 ---
 
@@ -472,8 +506,10 @@ src/main/
   index.ts                  boot, atalho global, ciclo de vida
   session.ts                a máquina de estados
   whisper.ts                whisper-server sob demanda
-  model.ts                  catálogo e download do modelo
-  corrector.ts              limpeza e dicionário, sem LLM
+  llm.ts                    llama-server sob demanda
+  polish.ts                 prompt e conferência do segundo estágio
+  model.ts                  catálogo, download automático e limpeza
+  corrector.ts              limpeza, dicionário e pontuação, sem LLM
   glossary.ts               prompts de viés técnico
   context.ts                app em foco para modo
   tray.ts overlay.ts        barra de menu e painel flutuante
@@ -486,7 +522,8 @@ scripts/                    setup, empacotamento, benchmark, diagnóstico
 
 ## Roadmap
 
-- [ ] Assinatura estável para não perder permissões a cada atualização
+- [x] Assinatura estável para não perder permissões a cada atualização
+- [x] Download automático dos modelos na primeira abertura
 - [ ] Push-to-talk
 - [ ] Histórico de transcrições
 
