@@ -40,6 +40,13 @@ export interface Config {
   /** Aplicar o dicionário técnico também no modo normal (WhatsApp etc). */
   dictionaryInNormalMode: boolean;
   /**
+   * Pontuar como conversa: ponto final no meio do texto vira vírgula, a
+   * palavra seguinte perde a maiúscula que só existia por causa dele, e o
+   * texto nunca termina em ponto. É onde o texto vai parar que manda: em
+   * mensagem e em prompt ninguém escreve como em livro.
+   */
+  conversationalPunctuation: boolean;
+  /**
    * 'paste' cola sozinho com ⌘V no app de origem.
    * 'clipboard' só copia e avisa, você cola quando e onde quiser.
    */
@@ -93,9 +100,16 @@ export const DEFAULT_CONFIG: Config = {
   useGlossaryPrompt: true,
   useDictionary: true,
   removeDisfluencies: true,
-  polish: true,
+  // Desligado por padrão. Ele custa segundos em cima de cada ditado e a
+  // verificação de fidelidade descarta boa parte do que ele devolve, então o
+  // caso comum paga o preço sem levar o benefício. A limpeza determinística de
+  // `corrector.ts` já resolve repetição e hesitação, que é o que aparece na
+  // prática. Quem quiser o desembaraço de frase reformulada liga nas
+  // Configurações.
+  polish: false,
   polishModel: 'gemma-3-4b-it-Q4_K_M.gguf',
   dictionaryInNormalMode: false,
+  conversationalPunctuation: true,
   insertMode: 'paste',
   audioWhileRecording: 'pause',
   restoreClipboard: false,

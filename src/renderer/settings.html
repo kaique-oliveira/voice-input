@@ -207,6 +207,16 @@
       </div>
       <div class="row">
         <label>
+          Pontuar como conversa
+          <span class="hint">
+            Ponto final no meio do texto vira vírgula, sem maiúscula depois, e o
+            texto não termina em ponto. Interrogação e exclamação ficam.
+          </span>
+        </label>
+        <input type="checkbox" id="conversationalPunctuation" />
+      </div>
+      <div class="row">
+        <label>
           Dicionário também no modo Normal
           <span class="hint">Desligado evita "corrigir" conversa comum no WhatsApp.</span>
         </label>
@@ -258,9 +268,11 @@
         <label>
           Ajustar a estrutura da fala
           <span class="hint">
-            Um modelo local desembaraça frase reformulada no meio e pontua. Toda
-            saída passa por uma conferência: se ele reescrever, resumir ou perder
-            um termo técnico, o texto original prevalece.
+            Um modelo local desembaraça frase reformulada no meio. Toda saída
+            passa por uma conferência: se ele reescrever, resumir ou perder um
+            termo técnico, o texto original prevalece. Desligado por padrão
+            porque custa alguns segundos por ditado, e a limpeza de repetição
+            acima já resolve o caso comum sem custo nenhum.
           </span>
         </label>
         <input type="checkbox" id="polish" />

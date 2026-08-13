@@ -15,6 +15,7 @@ const FIELDS = [
   ['useGlossaryPrompt', 'checked'],
   ['useDictionary', 'checked'],
   ['removeDisfluencies', 'checked'],
+  ['conversationalPunctuation', 'checked'],
   ['polish', 'checked'],
   ['dictionaryInNormalMode', 'checked'],
   ['restoreClipboard', 'checked'],

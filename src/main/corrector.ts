@@ -261,6 +261,43 @@ function dedupeLoops(text: string): string {
   return out.join(' ');
 }
 
+/**
+ * Pontuação de conversa: ponto final vira vírgula, e o texto não termina em
+ * ponto.
+ *
+ * O Whisper pontua fala corrida como prosa de livro: cada respiro vira ponto
+ * final, e a palavra seguinte vem com maiúscula. Escrito, isso soa formal
+ * demais para onde o texto de fato vai parar — mensagem de WhatsApp e prompt
+ * não terminam em ponto, e "de agosto. De setembro" não era duas frases, era
+ * uma pausa no meio da mesma.
+ *
+ * A conversão é só de ponto final. Interrogação e exclamação carregam tom e
+ * ficam onde estão.
+ */
+const SENTENCE_BREAK = /(?<=[\p{L}\p{N}])\.\s+(["'“‘(]?)(\p{L}[\p{L}\p{N}'’-]*)/gu;
+
+export function conversational(text: string, protectedWords: Set<string>): string {
+  const output = text.replace(SENTENCE_BREAK, (_match, open: string, word: string) => {
+    // Mesma regra do `softenTagQuestions`: a maiúscula só cai quando é
+    // claramente palavra comum. "Claude" e "GitHub" continuam como estão.
+    const bare = word.replace(/[^\p{L}\p{N}]/gu, '');
+    const isOrdinaryWord =
+      /^\p{Lu}\p{Ll}+$/u.test(bare) && !protectedWords.has(bare.toLowerCase());
+    const next = isOrdinaryWord ? word[0].toLowerCase() + word.slice(1) : word;
+    return `, ${open}${next}`;
+  });
+
+  return (
+    output
+      // A conversão encosta vírgula em vírgula quando a fala já tinha uma.
+      .replace(/,(\s*,)+/g, ',')
+      .replace(/\s+([,.!?;:])/g, '$1')
+      // O ponto do fim é o que mais incomoda: nunca sobrevive. "?" e "!" sim.
+      .replace(/[\s.…]+$/u, '')
+      .trim()
+  );
+}
+
 function tidy(text: string): string {
   return text
     .replace(ARTIFACT_PATTERN, ' ')
@@ -283,6 +320,7 @@ export function correct(
     dictionary: Record<string, string>;
     useDictionary: boolean;
     removeDisfluencies?: boolean;
+    conversationalPunctuation?: boolean;
   }
 ): CorrectionResult {
   let text = tidy(raw);
@@ -308,6 +346,10 @@ export function correct(
   }
 
   text = softenTagQuestions(text, protectedWords);
+
+  if (options.conversationalPunctuation !== false) {
+    text = conversational(text, protectedWords);
+  }
 
   // Única liberdade que damos ao modo normal: garantir maiúscula inicial.
   // Nada de reescrever, resumir ou "melhorar" a frase.

@@ -7,7 +7,7 @@ import { tmpDir } from './paths';
 import { loadConfig, type Config, type Mode } from './config';
 import { loadDictionary } from './dictionary';
 import { buildPrompt, termsFromDictionary } from './glossary';
-import { correct } from './corrector';
+import { conversational, correct } from './corrector';
 import { resolveMode, type FrontApp } from './context';
 import * as helper from './helper';
 import * as platform from './platform';
@@ -245,6 +245,7 @@ export class Session extends EventEmitter {
         dictionary,
         useDictionary,
         removeDisfluencies: config.removeDisfluencies,
+        conversationalPunctuation: config.conversationalPunctuation,
       });
       if (result.empty) throw new SessionError('EMPTY_AUDIO');
 
@@ -252,6 +253,14 @@ export class Session extends EventEmitter {
       if (config.polish && this.llm.available) {
         this.setState('polishing');
         finalText = await this.polish(finalText, dictionary);
+        // O modelo pontua como prosa, então a pontuação de conversa é aplicada
+        // de novo por cima do que ele devolveu.
+        if (config.conversationalPunctuation) {
+          finalText = conversational(
+            finalText,
+            new Set(Object.values(dictionary).map((value) => value.toLowerCase()))
+          );
+        }
       }
 
       this.setState('pasting');

@@ -161,6 +161,21 @@ Qualquer reprovação devolve o texto da etapa anterior. O pior caso desta camad
 é não melhorar, nunca é virar outra coisa. Nos testes ela pegou o modelo
 trocando "commita" por "comite" e engolindo o final de uma fala.
 
+Ela vem **desligada** por padrão, e não por acaso: são segundos em cima de cada
+ditado, e a conferência acima descarta boa parte do que o modelo devolve, então
+no uso comum você paga a espera sem levar a melhora. Repetição e hesitação, que
+é o que de fato aparece, a camada determinística já resolve de graça. Ligue nas
+Configurações se o seu caso for o de reformular frase no meio.
+
+**Pontuação de conversa.** O Whisper pontua fala como prosa de livro: cada
+respiro vira ponto final, e a palavra seguinte vem com maiúscula. Só que o
+texto vai parar no WhatsApp ou num prompt, onde ninguém escreve assim. Então
+ponto final no meio do texto vira vírgula, a maiúscula que existia só por causa
+dele cai, e o texto não termina em ponto. "de agosto. De setembro" não era duas
+frases, era uma pausa. Interrogação e exclamação ficam: essas carregam tom.
+Termo com grafia própria nunca é rebaixado, então "Claude" e "GitHub"
+continuam como estão.
+
 **Helper em Swift.** Gravar pelo renderer do Electron custaria ou 80 MB
 permanentes de memória, ou 300 ms de latência no início da fala, o que corta a
 primeira palavra. O helper é um arquivo só, sem projeto Xcode, e resolve também
@@ -303,7 +318,8 @@ os que faltaram.
 | `threads` | `6` | threads do whisper |
 | `keepModelWarmMs` | `300000` | quanto o modelo fica em RAM sem uso |
 | `mode` | `auto` | `auto`, `developer` ou `normal` |
-| `polish` | `true` | segundo estágio que desembaraça a estrutura da fala |
+| `polish` | `false` | segundo estágio que desembaraça a estrutura da fala; custa segundos, ligue se quiser |
+| `conversationalPunctuation` | `true` | ponto final vira vírgula e o texto não termina em ponto |
 | `insertMode` | `paste` | `paste` cola com ⌘V, `clipboard` só copia |
 | `audioWhileRecording` | `pause` | `pause` pausa e silencia, `mute` só silencia, `off` não mexe |
 | `restoreClipboard` | `false` | ligado devolve o clipboard anterior, desligado deixa a transcrição como reserva |
