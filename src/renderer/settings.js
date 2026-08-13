@@ -20,7 +20,17 @@ const FIELDS = [
   ['dictionaryInNormalMode', 'checked'],
   ['restoreClipboard', 'checked'],
   ['playSounds', 'checked'],
+  ['soundStart', 'value'],
+  ['soundPasted', 'value'],
+  ['soundClipboard', 'value'],
+  ['soundError', 'value'],
   ['launchAtLogin', 'checked'],
+];
+
+/** Os sons que todo macOS tem em /System/Library/Sounds. */
+const SOUNDS = [
+  'Basso', 'Blow', 'Bottle', 'Frog', 'Funk', 'Glass', 'Hero',
+  'Morse', 'Ping', 'Pop', 'Purr', 'Sosumi', 'Submarine', 'Tink',
 ];
 
 let catalog = [];
@@ -74,6 +84,17 @@ function setStatus(el, ok, okText, badText) {
 async function refresh() {
   const state = await window.api.load();
   const { config, dictionary, permissions, models } = state;
+
+  // Os seletores de som são iguais entre si: mesma lista, ordem alfabética.
+  for (const select of document.querySelectorAll('select.sound')) {
+    if (select.options.length) continue;
+    for (const name of SOUNDS) {
+      const option = document.createElement('option');
+      option.value = name;
+      option.textContent = name;
+      select.appendChild(option);
+    }
+  }
 
   for (const [id, kind] of FIELDS) {
     const el = $(id);
@@ -156,6 +177,11 @@ setInterval(async () => {
 
 async function save(patch) {
   await window.api.saveConfig(patch);
+}
+
+// Trocar o som toca o som: escolher pelo nome seria adivinhação.
+for (const select of document.querySelectorAll('select.sound')) {
+  select.addEventListener('change', (event) => window.api.previewSound(event.target.value));
 }
 
 for (const [id, kind] of FIELDS) {

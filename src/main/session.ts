@@ -4,7 +4,7 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { app, clipboard, Notification } from 'electron';
 import { tmpDir } from './paths';
-import { loadConfig, type Config, type Mode } from './config';
+import { loadConfig, type Config, type Mode, type SystemSound } from './config';
 import { loadDictionary } from './dictionary';
 import { buildPrompt, termsFromDictionary } from './glossary';
 import { conversational, correct } from './corrector';
@@ -163,7 +163,7 @@ export class Session extends EventEmitter {
     recordPromise.catch(() => undefined);
 
     this.setState('recording');
-    this.play('Tink');
+    this.play(config.soundStart);
 
     // A ordem aqui não é estética. Ler o app em foco tem de vir ANTES de
     // qualquer janela nossa aparecer: criar o overlay torna o Voice Input o
@@ -264,7 +264,7 @@ export class Session extends EventEmitter {
       }
 
       this.setState('pasting');
-      await this.insert(finalText, config, front?.bundleId);
+      const outcome = await this.insert(finalText, config, front?.bundleId);
       log.info(
         config.insertMode === 'clipboard'
           ? `copiado para a área de transferência (${Date.now() - startedProcessing} ms)`
@@ -277,7 +277,7 @@ export class Session extends EventEmitter {
         seconds,
         ms: Date.now() - startedProcessing,
       });
-      this.play('Pop');
+      this.play(outcome === 'pasted' ? config.soundPasted : config.soundClipboard);
       this.setState('idle');
     } catch (error) {
       this.setState('idle');
@@ -299,7 +299,11 @@ export class Session extends EventEmitter {
    * pelo menos fica na área de transferência, melhor perder o "automático"
    * do que perder o que você falou.
    */
-  private async insert(text: string, config: Config, bundleId?: string): Promise<void> {
+  private async insert(
+    text: string,
+    config: Config,
+    bundleId?: string
+  ): Promise<'pasted' | 'clipboard'> {
     // A transcrição vai para a área de transferência ANTES de qualquer
     // tentativa de colar. Colar tem várias formas de falhar que não dependem
     // de nós: campo protegido por Secure Input, app que ignora ⌘V, permissão
@@ -311,7 +315,7 @@ export class Session extends EventEmitter {
         title: 'Voice Input: copiado',
         body: text.length > 140 ? `${text.slice(0, 140)}…` : text,
       }).show();
-      return;
+      return 'clipboard';
     }
 
     try {
@@ -326,6 +330,7 @@ export class Session extends EventEmitter {
       if (bundleId && result.frontBefore && result.frontBefore !== bundleId) {
         log.warn(`foco estava em ${result.frontBefore}, devolvido para ${bundleId}`);
       }
+      return 'pasted';
     } catch (error) {
       const code = error instanceof helper.HelperError ? error.code : 'desconhecido';
       log.error(`colagem falhou [${code}], texto preservado na área de transferência`);
@@ -438,7 +443,7 @@ export class Session extends EventEmitter {
     this.wavPath = '';
   }
 
-  private play(sound: 'Tink' | 'Pop' | 'Basso'): void {
+  private play(sound: SystemSound): void {
     if (!loadConfig().playSounds) return;
     // Feedback sonoro importa: você não olha para a barra de menu enquanto fala.
     const child = spawn('/usr/bin/afplay', [`/System/Library/Sounds/${sound}.aiff`], {
@@ -466,7 +471,12 @@ export class Session extends EventEmitter {
       ERROR_MESSAGES[code] ?? (error instanceof Error ? error.message : 'Erro inesperado.');
 
     log.error(`falhou [${code}] ${message}`, error);
-    this.play('Basso');
+    // Colagem que falha não é a mesma coisa que ditado perdido: o texto está
+    // inteiro na área de transferência, só falta o ⌘V. Merece o som de "quase",
+    // não o de erro.
+    const config = loadConfig();
+    const salvaged = code === 'AX_DENIED' || code === 'PASTE_FAILED';
+    this.play(salvaged ? config.soundClipboard : config.soundError);
     this.emit('error', { code, message });
 
     new Notification({ title: 'Voice Input', body: message }).show();

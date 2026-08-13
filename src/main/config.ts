@@ -5,6 +5,11 @@ import { DEFAULT_APP_MODES, DEFAULT_NAME_RULES } from './context';
 
 export type Mode = 'developer' | 'normal';
 
+/** Sons de /System/Library/Sounds. Todo macOS tem estes. */
+export type SystemSound =
+  | 'Basso' | 'Blow' | 'Bottle' | 'Frog' | 'Funk' | 'Glass' | 'Hero'
+  | 'Morse' | 'Ping' | 'Pop' | 'Purr' | 'Sosumi' | 'Submarine' | 'Tink';
+
 export interface Config {
   /** Acelerador no formato do Electron. */
   shortcut: string;
@@ -73,6 +78,21 @@ export interface Config {
   restoreClipboard: boolean;
   pasteDelayMs: number;
   playSounds: boolean;
+  /**
+   * Três desfechos, três sons, porque você não olha para a barra de menu
+   * enquanto fala. O som é o único jeito de saber o que aconteceu.
+   *
+   * `soundStart`   começou a gravar
+   * `soundPasted`  colou no app: acabou, não há nada a fazer
+   * `soundClipboard` o texto ficou na área de transferência e espera um ⌘V
+   * `soundError`   não saiu texto nenhum
+   *
+   * Qualquer nome de /System/Library/Sounds serve.
+   */
+  soundStart: SystemSound;
+  soundPasted: SystemSound;
+  soundClipboard: SystemSound;
+  soundError: SystemSound;
   launchAtLogin: boolean;
 }
 
@@ -115,6 +135,14 @@ export const DEFAULT_CONFIG: Config = {
   restoreClipboard: false,
   pasteDelayMs: 90,
   playSounds: true,
+  soundStart: 'Tink',
+  // Colou: sino curto, som de coisa concluída.
+  soundPasted: 'Glass',
+  // Ficou na área de transferência: som neutro, nem festa nem erro. É o aviso
+  // de que falta um ⌘V seu.
+  soundClipboard: 'Pop',
+  // Erro de verdade: nada de texto saiu.
+  soundError: 'Basso',
   launchAtLogin: false,
 };
 

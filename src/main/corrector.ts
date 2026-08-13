@@ -81,6 +81,21 @@ export function applyDictionary(text: string, dictionary: Record<string, string>
  */
 const TAG_MARKERS = ['né', 'viu'];
 
+/**
+ * Devolve a palavra sem a maiúscula que só existia por causa de uma pontuação
+ * que deixou de ser fim de frase.
+ *
+ * Só desce a inicial quando é claramente palavra comum: nada de "GitHub" virar
+ * "gitHub" nem "Claude" virar "claude". Uma letra só conta como palavra comum,
+ * senão o "E" e o "A" do português ficariam de maiúscula no meio da frase.
+ */
+function lowerIfOrdinary(word: string, protectedWords: Set<string>): string {
+  const bare = word.replace(/[^\p{L}\p{N}]/gu, '');
+  const isOrdinaryWord =
+    /^\p{Lu}\p{Ll}*$/u.test(bare) && !protectedWords.has(bare.toLowerCase());
+  return isOrdinaryWord ? word[0].toLowerCase() + word.slice(1) : word;
+}
+
 function softenTagQuestions(text: string, protectedWords: Set<string>): string {
   const pattern = new RegExp(
     `(^|[\\s,])(${TAG_MARKERS.join('|')})\\?(\\s*)(\\S+)?`,
@@ -92,14 +107,7 @@ function softenTagQuestions(text: string, protectedWords: Set<string>): string {
     if (!next) return `${before}${marker}.`;
 
     // Whisper capitaliza a palavra seguinte porque tratou como nova frase.
-    // Só desfazemos isso quando é claramente palavra comum: nada de "GitHub"
-    // virar "gitHub" nem "Claude" virar "claude".
-    const bare = next.replace(/[^\p{L}\p{N}]/gu, '');
-    const isOrdinaryWord =
-      /^\p{Lu}\p{Ll}+$/u.test(bare) && !protectedWords.has(bare.toLowerCase());
-    const following = isOrdinaryWord ? next[0].toLowerCase() + next.slice(1) : next;
-
-    return `${before}${marker}, ${following}`;
+    return `${before}${marker}, ${lowerIfOrdinary(next, protectedWords)}`;
   });
 }
 
@@ -278,13 +286,7 @@ const SENTENCE_BREAK = /(?<=[\p{L}\p{N}])\.\s+(["'“‘(]?)(\p{L}[\p{L}\p{N}'�
 
 export function conversational(text: string, protectedWords: Set<string>): string {
   const output = text.replace(SENTENCE_BREAK, (_match, open: string, word: string) => {
-    // Mesma regra do `softenTagQuestions`: a maiúscula só cai quando é
-    // claramente palavra comum. "Claude" e "GitHub" continuam como estão.
-    const bare = word.replace(/[^\p{L}\p{N}]/gu, '');
-    const isOrdinaryWord =
-      /^\p{Lu}\p{Ll}+$/u.test(bare) && !protectedWords.has(bare.toLowerCase());
-    const next = isOrdinaryWord ? word[0].toLowerCase() + word.slice(1) : word;
-    return `, ${open}${next}`;
+    return `, ${open}${lowerIfOrdinary(word, protectedWords)}`;
   });
 
   return (

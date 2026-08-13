@@ -15,6 +15,7 @@ contextBridge.exposeInMainWorld('api', {
   openDataDir: () => ipcRenderer.invoke('settings:open-data-dir'),
   downloadModel: (file: string) => ipcRenderer.invoke('model:download', file),
   cancelModelDownload: () => ipcRenderer.invoke('model:cancel'),
+  previewSound: (sound: string) => ipcRenderer.invoke('sound:preview', sound),
   onModelProgress: (
     handler: (progress: { file: string; received: number; total: number }) => void
   ) => {

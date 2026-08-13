@@ -331,6 +331,34 @@
         <input type="checkbox" id="playSounds" />
       </div>
       <div class="row">
+        <label>
+          Som ao começar a gravar
+          <span class="hint">Escolha um e ele toca na hora, para você ouvir.</span>
+        </label>
+        <select id="soundStart" class="sound"></select>
+      </div>
+      <div class="row">
+        <label>Som ao colar no app</label>
+        <select id="soundPasted" class="sound"></select>
+      </div>
+      <div class="row">
+        <label>
+          Som quando fica na área de transferência
+          <span class="hint">
+            Quando a colagem não é possível e falta um ⌘V seu. Não é erro, então
+            não soa como um.
+          </span>
+        </label>
+        <select id="soundClipboard" class="sound"></select>
+      </div>
+      <div class="row">
+        <label>
+          Som de erro
+          <span class="hint">Só quando não saiu texto nenhum.</span>
+        </label>
+        <select id="soundError" class="sound"></select>
+      </div>
+      <div class="row">
         <label>Abrir ao fazer login</label>
         <input type="checkbox" id="launchAtLogin" />
       </div>

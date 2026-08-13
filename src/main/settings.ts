@@ -1,5 +1,6 @@
 import { BrowserWindow, ipcMain, shell, systemPreferences } from 'electron';
 import path from 'node:path';
+import { spawn } from 'node:child_process';
 import { loadConfig, saveConfig, DEFAULT_CONFIG, type Config } from './config';
 import { loadDictionary, saveDictionary, DEFAULT_DICTIONARY } from './dictionary';
 import { dataDir } from './paths';
@@ -104,6 +105,17 @@ export function registerSettingsIpc(hooks: SettingsHooks): void {
   });
 
   ipcMain.handle('model:cancel', () => cancelDownload());
+
+  // Escolher som pelo nome é adivinhação. Toca na hora, você decide ouvindo.
+  ipcMain.handle('sound:preview', (_event, sound: string) => {
+    if (!/^[A-Za-z]+$/.test(sound)) return;
+    const child = spawn('/usr/bin/afplay', [`/System/Library/Sounds/${sound}.aiff`], {
+      stdio: 'ignore',
+      detached: true,
+    });
+    child.unref();
+    child.on('error', () => undefined);
+  });
 
   ipcMain.handle('settings:save-config', (_event, patch: Partial<Config>) => {
     const next = saveConfig(patch);
