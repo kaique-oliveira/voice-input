@@ -1,83 +1,60 @@
 /**
- * Segundo estágio: arrumar a estrutura da fala com um modelo de linguagem local.
+ * Segundo estágio: um modelo de linguagem local só para pontuar e capitalizar.
  *
- * Existe por um motivo específico que nenhum reconhecedor resolve. Quando o
- * falante começa uma frase, se interrompe e recomeça de outro jeito, a
- * transcrição fiel fica assim:
+ * O escopo já foi maior. A versão anterior mandava o modelo desembaraçar frase
+ * reformulada, o que é interpretar intenção, e para isso usava um modelo de 4B.
+ * Medido em uso real, aquilo custava de 6 a 15 segundos por ditado e devolvia
+ * saída vazia em toda tentativa registrada no log. O trabalho que sobra aqui é
+ * o que a correção determinística não faz: maiúscula de nome próprio e vírgula
+ * onde a fala pedia. Isso um modelo pequeno resolve em menos de 300 ms.
  *
- *   "Então eu queria que ele, na verdade, o que eu quero é que ele entenda..."
- *
- * O whisper está certo: foi isso que a pessoa disse. Escolher a versão que ela
- * de fato quis dizer é interpretar intenção, e isso é trabalho de modelo de
- * linguagem. A correção determinística de `corrector.ts` não alcança, porque
- * aqui não há repetição literal, há reformulação.
- *
- * O RISCO é conhecido: modelo de linguagem adora reescrever. Por isso nada aqui
- * é confiado ao modelo. Toda saída passa pela verificação de `isFaithful`, e o
- * texto original prevalece em qualquer dúvida. O pior caso deste arquivo é não
- * melhorar. Nunca é transformar o que você falou em outra coisa.
+ * A regra é dura e simples: o modelo pode mudar pontuação, acentuação e
+ * maiúsculas, mais nada. `isFaithful` compara a sequência de palavras dos dois
+ * textos e reprova qualquer diferença, então uma palavra trocada nunca chega
+ * até você. O pior caso deste arquivo é não melhorar. Nunca é virar outra coisa.
  */
 
 /**
  * Instrução deliberadamente restritiva: proíbe mais do que permite.
  *
- * Os exemplos não são enfeite. Sem eles, um modelo de 4B entende "corrija" como
+ * O exemplo não é enfeite. Sem ele, um modelo pequeno entende "corrija" como
  * "melhore" e começa a trocar palavras. Mostrar uma entrada e uma saída ancora
  * o comportamento muito melhor que qualquer quantidade de regra escrita.
  */
 export const POLISH_SYSTEM_PROMPT = [
-  'Você é um revisor de transcrições de fala em português do Brasil.',
-  'Seu trabalho é pontuar e desembaraçar, nunca reescrever.',
+  'Você recebe a transcrição de uma fala em português do Brasil.',
+  'Devolva o MESMO texto, mudando apenas pontuação, acentuação e maiúsculas.',
   '',
   'PROIBIDO:',
-  '- trocar uma palavra por sinônimo',
-  '- resumir, encurtar ou apagar qualquer ideia dita',
-  '- adicionar informação que não foi dita',
-  '- responder ao conteúdo (você revisa, não conversa)',
-  '- mexer na grafia de termos técnicos, comandos, nomes próprios ou palavras',
-  '  em inglês',
+  '- trocar, acrescentar ou remover qualquer palavra',
+  '- reordenar, resumir ou responder ao conteúdo',
+  '- mexer em termo técnico, comando ou palavra em inglês',
+  '- usar travessão, ponto e vírgula ou reticências',
   '',
-  'PERMITIDO:',
-  '- pontuação, acentuação e maiúsculas',
-  '- remover hesitação: "é, é", "ãh", "tipo assim", "sabe"',
-  '- quando a pessoa começou uma frase, se interrompeu e recomeçou de outro',
-  '  jeito, ficar só com o recomeço',
+  'Exemplo',
+  'Entrada: então eu preciso commitar isso na branch develop. depois roda o',
+  'teste no git hub actions',
+  'Saída: Então eu preciso commitar isso na branch develop, depois roda o teste',
+  'no GitHub Actions.',
   '',
-  'Exemplo 1',
-  'Entrada: então eu queria que ele, na verdade, o que eu quero é que ele',
-  'entenda melhor o tom, sabe, tipo assim, quando eu me perco no meio da frase',
-  'ele escreve uma coisa sem pé nem cabeça',
-  'Saída: O que eu quero é que ele entenda melhor o tom. Quando eu me perco no',
-  'meio da frase, ele escreve uma coisa sem pé nem cabeça.',
-  '',
-  'Exemplo 2',
-  'Entrada: commita essa alteração e dá push pra branch develop, e aí depois,',
-  'ah, na verdade, antes disso roda o teste',
-  'Saída: Commita essa alteração e dá push pra branch develop. E aí depois, na',
-  'verdade antes disso, roda o teste.',
-  '',
-  'Responda somente com o texto revisado. Sem aspas, sem explicação, sem',
-  'comentário, sem prefixo.',
+  'Responda somente com o texto.',
 ].join('\n');
 
+/**
+ * Sequência de palavras, sem acento, sem maiúscula e sem pontuação.
+ *
+ * É a forma canônica da fala: tudo que o polimento tem permissão de mudar
+ * desaparece nesta normalização. Duas sequências iguais significam que só a
+ * pontuação, a acentuação e as maiúsculas mudaram.
+ */
 function words(text: string): string[] {
   return text
     .toLowerCase()
     .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .split(/[^\p{L}\p{N}.]+/u)
+    .replace(/[\u0300-\u036f]/g, '')
+    .split(/[^\p{L}\p{N}]+/u)
     .filter(Boolean);
 }
-
-/**
- * Palavras que o polimento tem permissão de eliminar. São exatamente as que ele
- * foi contratado para tirar, então sumirem não é sinal de reescrita.
- */
-const REMOVABLE = new Set([
-  'e', 'ah', 'ahn', 'ne', 'ta', 'tipo', 'assim', 'sabe', 'entao', 'ai', 'la',
-  'so', 'ja', 'que', 'de', 'do', 'da', 'em', 'no', 'na', 'o', 'a', 'os', 'as',
-  'um', 'uma', 'para', 'pra', 'com', 'e', 'eh', 'hum', 'verdade', 'meio',
-]);
 
 export interface FaithfulnessCheck {
   ok: boolean;
@@ -87,74 +64,29 @@ export interface FaithfulnessCheck {
 /**
  * Decide se a saída do modelo ainda é a fala do usuário.
  *
- * Três perguntas, todas verificáveis sem modelo nenhum:
+ * A pergunta é uma só: as palavras são exatamente as mesmas, na mesma ordem?
  *
- *   1. Ele inventou palavras que não estavam na entrada?
- *   2. Ele apagou conteúdo demais?
- *   3. Ele perdeu algum termo técnico que estava lá?
+ * Antes eram três perguntas com limiares (18% de palavras novas, 72% de
+ * conteúdo preservado, 70% do último terço), porque o modelo tinha licença
+ * para apagar hesitação e escolher entre duas versões de uma frase. Com o
+ * escopo reduzido a pontuação e maiúsculas, licença nenhuma sobra, e limiar
+ * vira brecha: uma troca de "eu" por "você" num texto de 17 palavras dá 6% de
+ * palavras novas e passava batido. Foi o que o Gemma 1B fez no teste.
  *
- * Qualquer "sim" descarta o polimento. Os limites são propositalmente
- * apertados: preferimos deixar passar um texto imperfeito a devolver um texto
- * que a pessoa não disse.
+ * Comparar a sequência inteira não tem brecha e ainda diz onde quebrou.
  */
-export function isFaithful(
-  original: string,
-  polished: string,
-  protectedTerms: Iterable<string>
-): FaithfulnessCheck {
+export function isFaithful(original: string, polished: string): FaithfulnessCheck {
   const before = words(original);
   const after = words(polished);
 
   if (after.length === 0) return { ok: false, reason: 'saída vazia' };
-
-  // 1. Palavras novas. Um pouco é esperado (acentuação, concordância ao juntar
-  //    frases), muito significa que o modelo escreveu por conta própria.
-  const pool = new Map<string, number>();
-  for (const word of before) pool.set(word, (pool.get(word) ?? 0) + 1);
-  let novel = 0;
-  for (const word of after) {
-    const left = pool.get(word) ?? 0;
-    if (left > 0) pool.set(word, left - 1);
-    else novel++;
-  }
-  const novelRatio = novel / after.length;
-  if (novelRatio > 0.18) {
-    return { ok: false, reason: `${Math.round(novelRatio * 100)}% de palavras novas` };
+  if (after.length !== before.length) {
+    return { ok: false, reason: `${before.length} palavras viraram ${after.length}` };
   }
 
-  // 2. Conteúdo removido. Descontamos as palavras que ele tinha licença para
-  //    tirar, senão uma fala cheia de hesitação seria reprovada injustamente.
-  const meaningfulBefore = before.filter((word) => !REMOVABLE.has(word));
-  const meaningfulAfter = new Set(after.filter((word) => !REMOVABLE.has(word)));
-  const survivors = meaningfulBefore.filter((word) => meaningfulAfter.has(word));
-  const keptRatio = meaningfulBefore.length ? survivors.length / meaningfulBefore.length : 1;
-  // O limite é frouxo de propósito. Descartar o trecho abandonado de um
-  // recomeço é justamente o serviço contratado, e isso apaga palavras de
-  // conteúdo. Apertar aqui reprovaria os acertos. Quem protege contra resumo
-  // de verdade é a checagem do final, logo abaixo, que é mais específica.
-  if (keptRatio < 0.72) {
-    return { ok: false, reason: `só ${Math.round(keptRatio * 100)}% do conteúdo sobreviveu` };
-  }
-
-  // Modelos pequenos gostam de "concluir" cedo e engolir o final da fala. Uma
-  // razão global alta esconde isso, porque o começo intacto compensa. Então o
-  // último terço é conferido à parte.
-  const tail = meaningfulBefore.slice(Math.floor(meaningfulBefore.length * 0.66));
-  if (tail.length >= 3) {
-    const tailKept = tail.filter((word) => meaningfulAfter.has(word)).length / tail.length;
-    if (tailKept < 0.7) {
-      return { ok: false, reason: `perdeu o final da fala (${Math.round(tailKept * 100)}%)` };
-    }
-  }
-
-  // 3. Termos técnicos. Estes são o motivo do projeto existir: perder um é
-  //    reprovação imediata, por menor que seja o resto da mudança.
-  const polishedLower = polished.toLowerCase();
-  const originalLower = original.toLowerCase();
-  for (const term of protectedTerms) {
-    const needle = term.toLowerCase();
-    if (originalLower.includes(needle) && !polishedLower.includes(needle)) {
-      return { ok: false, reason: `perdeu o termo "${term}"` };
+  for (let index = 0; index < before.length; index++) {
+    if (before[index] !== after[index]) {
+      return { ok: false, reason: `trocou "${before[index]}" por "${after[index]}"` };
     }
   }
 
@@ -163,7 +95,9 @@ export function isFaithful(
 
 /** Tira aspas e prefixos que modelos gostam de acrescentar mesmo proibidos. */
 export function cleanModelOutput(raw: string): string {
-  let text = raw.trim();
+  // Rede de segurança para modelo que raciocina em voz alta: se o bloco de
+  // pensamento escapar, ele não pode virar texto colado no seu editor.
+  let text = raw.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
   text = text.replace(/^```[a-z]*\n?/i, '').replace(/\n?```$/, '');
   text = text.replace(/^(?:texto corrigido|corrigido|saída|resposta)\s*:\s*/i, '');
   // Aspas envolvendo o texto inteiro, não as que fazem parte da fala.

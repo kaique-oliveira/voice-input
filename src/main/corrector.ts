@@ -291,6 +291,10 @@ export function conversational(text: string, protectedWords: Set<string>): strin
 
   return (
     output
+      // Travessão é pontuação de texto escrito com calma, não de fala, e
+      // modelo de linguagem adora enfiar um. Vira vírgula. O hífen de
+      // "bem-vindo" não é atingido: aqui só cai o traço cercado de espaço.
+      .replace(/\s+[—–-]\s+/g, ', ')
       // A conversão encosta vírgula em vírgula quando a fala já tinha uma.
       .replace(/,(\s*,)+/g, ',')
       .replace(/\s+([,.!?;:])/g, '$1')

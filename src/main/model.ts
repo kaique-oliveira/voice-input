@@ -77,11 +77,18 @@ export const MODELS: ModelInfo[] = [
  */
 export const POLISH_MODELS: ModelInfo[] = [
   {
-    file: 'gemma-3-4b-it-Q4_K_M.gguf',
-    label: 'Gemma 3 4B',
-    bytes: 2_489_000_000,
-    url: 'https://huggingface.co/ggml-org/gemma-3-4b-it-GGUF/resolve/main/gemma-3-4b-it-Q4_K_M.gguf',
-    note: 'Desembaraça frases reformuladas e pontua. Roda local, carrega em menos de 1 s.',
+    file: 'Qwen3-1.7B-Q4_K_M.gguf',
+    label: 'Qwen3 1.7B',
+    bytes: 1_282_000_000,
+    url: 'https://huggingface.co/ggml-org/Qwen3-1.7B-GGUF/resolve/main/Qwen3-1.7B-Q4_K_M.gguf',
+    note: 'Recomendado. Pontua e capitaliza em ~280 ms, sem trocar palavra nenhuma.',
+  },
+  {
+    file: 'gemma-3-1b-it-Q4_K_M.gguf',
+    label: 'Gemma 3 1B',
+    bytes: 806_000_000,
+    url: 'https://huggingface.co/ggml-org/gemma-3-1b-it-GGUF/resolve/main/gemma-3-1b-it-Q4_K_M.gguf',
+    note: 'Menor e um pouco mais rápido, mas troca palavra: virou "commita" em "commite" no teste.',
   },
 ];
 

@@ -177,6 +177,10 @@ export class LlmService {
         top_p: 1,
         max_tokens: maxTokens,
         stream: false,
+        // O Qwen3 raciocina em voz alta antes de responder, o que aqui só
+        // custaria segundos: não há o que deliberar em "onde vai a vírgula".
+        // Modelo que não tem esse modo ignora o parâmetro.
+        chat_template_kwargs: { enable_thinking: false },
       }),
     });
 

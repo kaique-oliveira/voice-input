@@ -57,9 +57,9 @@ export interface Config {
    */
   insertMode: 'paste' | 'clipboard';
   /**
-   * Segundo estágio: um modelo de linguagem local desembaraça a estrutura da
-   * fala, sem reescrever. Toda saída dele passa por uma verificação de
-   * fidelidade, e o texto original prevalece em qualquer dúvida.
+   * Segundo estágio: um modelo de linguagem local pontua e capitaliza, e só.
+   * A saída dele é comparada palavra por palavra com a entrada; qualquer
+   * palavra diferente descarta o polimento inteiro.
    */
   polish: boolean;
   polishModel: string;
@@ -120,14 +120,11 @@ export const DEFAULT_CONFIG: Config = {
   useGlossaryPrompt: true,
   useDictionary: true,
   removeDisfluencies: true,
-  // Desligado por padrão. Ele custa segundos em cima de cada ditado e a
-  // verificação de fidelidade descarta boa parte do que ele devolve, então o
-  // caso comum paga o preço sem levar o benefício. A limpeza determinística de
-  // `corrector.ts` já resolve repetição e hesitação, que é o que aparece na
-  // prática. Quem quiser o desembaraço de frase reformulada liga nas
-  // Configurações.
-  polish: false,
-  polishModel: 'gemma-3-4b-it-Q4_K_M.gguf',
+  // Ligado de novo, agora que o escopo é só pontuação e maiúscula e o modelo
+  // é pequeno: medido em ~280 ms, contra os 6 a 15 segundos do arranjo
+  // anterior. Sem o modelo baixado, esta etapa simplesmente não roda.
+  polish: true,
+  polishModel: 'Qwen3-1.7B-Q4_K_M.gguf',
   dictionaryInNormalMode: false,
   conversationalPunctuation: true,
   insertMode: 'paste',

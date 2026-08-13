@@ -252,7 +252,7 @@ export class Session extends EventEmitter {
       let finalText = result.text;
       if (config.polish && this.llm.available) {
         this.setState('polishing');
-        finalText = await this.polish(finalText, dictionary);
+        finalText = await this.polish(finalText);
         // O modelo pontua como prosa, então a pontuação de conversa é aplicada
         // de novo por cima do que ele devolveu.
         if (config.conversationalPunctuation) {
@@ -390,7 +390,7 @@ export class Session extends EventEmitter {
    * linguagem é uma sugestão que precisa passar na conferência, não uma
    * autoridade sobre o que você falou.
    */
-  private async polish(text: string, dictionary: Record<string, string>): Promise<string> {
+  private async polish(text: string): Promise<string> {
     const started = Date.now();
     try {
       const raw = await this.llm.complete(
@@ -401,7 +401,7 @@ export class Session extends EventEmitter {
         Math.min(2048, Math.ceil(text.length / 2) + 256)
       );
       const candidate = cleanModelOutput(raw);
-      const check = isFaithful(text, candidate, Object.values(dictionary));
+      const check = isFaithful(text, candidate);
       if (!check.ok) {
         log.warn(`polimento descartado: ${check.reason} (${Date.now() - started} ms)`);
         return text;
