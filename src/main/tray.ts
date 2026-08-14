@@ -1,4 +1,4 @@
-import { app, Menu, Notification, Tray, shell } from 'electron';
+import { app, Menu, Notification, Tray, nativeTheme, shell } from 'electron';
 import path from 'node:path';
 import { trayIcons } from './icons';
 import { loadConfig, saveConfig } from './config';
@@ -22,6 +22,11 @@ const MODIFIER_SYMBOLS: Array<[RegExp, string]> = [
 ];
 
 export function formatAccelerator(accelerator: string): string {
+  // Os símbolos ⌘⌃⌥ são vocabulário do macOS. No Windows e no Linux o nome
+  // por extenso é o que o usuário reconhece.
+  if (!platform.isMac) {
+    return accelerator.replace(/CommandOrControl/gi, 'Ctrl').replace(/Space/gi, 'Espaço');
+  }
   let output = accelerator;
   for (const [pattern, symbol] of MODIFIER_SYMBOLS) output = output.replace(pattern, symbol);
   return output.replace(/\+/g, '');
@@ -109,6 +114,9 @@ export class TrayController {
     this.tray.on('right-click', () => this.openMenu());
 
     this.session.on('state', () => this.render());
+    // Fora do macOS a cor do ícone acompanha o tema; quando ele muda, o
+    // ícone da bandeja precisa trocar junto para não sumir.
+    nativeTheme.on('updated', () => this.render());
     this.render();
   }
 
@@ -165,7 +173,7 @@ export class TrayController {
         label: `Inserção: ${config.insertMode === 'paste' ? 'colar automaticamente' : 'só copiar'}`,
         submenu: [
           {
-            label: 'Colar automaticamente (⌘V)',
+            label: `Colar automaticamente (${platform.isMac ? '⌘V' : 'Ctrl+V'})`,
             type: 'radio',
             checked: config.insertMode === 'paste',
             click: () => this.setInsertMode('paste'),

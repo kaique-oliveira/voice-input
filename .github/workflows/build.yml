@@ -67,14 +67,24 @@ jobs:
           git clone --depth 1 https://github.com/ggml-org/whisper.cpp.git .build/whisper.cpp
           git clone --depth 1 https://github.com/ggml-org/llama.cpp.git .build/llama.cpp
 
+      # No Windows o runtime do MSVC entra estático (MultiThreaded). Sem isso o
+      # binário exige o VC++ Redistributable, que nem toda máquina tem, e o
+      # sintoma é o app "instalado e mudo": o spawn falha ao carregar
+      # VCRUNTIME140.dll e nenhuma janela conta o porquê.
       - name: Compilar whisper.cpp
+        shell: bash
         run: |
-          cmake -S .build/whisper.cpp -B .build/whisper.cpp/build -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF -DWHISPER_BUILD_TESTS=OFF -DWHISPER_BUILD_EXAMPLES=ON
+          EXTRA=""
+          if [ "$RUNNER_OS" = "Windows" ]; then EXTRA='-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded'; fi
+          cmake -S .build/whisper.cpp -B .build/whisper.cpp/build -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF -DWHISPER_BUILD_TESTS=OFF -DWHISPER_BUILD_EXAMPLES=ON $EXTRA
           cmake --build .build/whisper.cpp/build --config Release --target whisper-server whisper-cli
 
       - name: Compilar llama.cpp
+        shell: bash
         run: |
-          cmake -S .build/llama.cpp -B .build/llama.cpp/build -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF -DLLAMA_CURL=OFF -DLLAMA_BUILD_TESTS=OFF -DLLAMA_BUILD_EXAMPLES=OFF -DLLAMA_BUILD_TOOLS=ON -DLLAMA_BUILD_SERVER=ON
+          EXTRA=""
+          if [ "$RUNNER_OS" = "Windows" ]; then EXTRA='-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded'; fi
+          cmake -S .build/llama.cpp -B .build/llama.cpp/build -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF -DLLAMA_CURL=OFF -DLLAMA_BUILD_TESTS=OFF -DLLAMA_BUILD_EXAMPLES=OFF -DLLAMA_BUILD_TOOLS=ON -DLLAMA_BUILD_SERVER=ON $EXTRA
           cmake --build .build/llama.cpp/build --config Release --target llama-server
 
       - name: Reunir os binários (Linux)

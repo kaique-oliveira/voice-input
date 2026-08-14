@@ -2,7 +2,7 @@ import { EventEmitter } from 'node:events';
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
-import { app, clipboard, Notification } from 'electron';
+import { app, clipboard, Notification, shell } from 'electron';
 import { tmpDir } from './paths';
 import { loadConfig, type Config, type Mode, type SystemSound } from './config';
 import { loadDictionary } from './dictionary';
@@ -53,19 +53,23 @@ const STATE_LABELS: Record<SessionState, string> = {
   pasting: 'Colando…',
 };
 
+/** A tecla de colar tem nome diferente em cada sistema, e as mensagens citam ela. */
+const PASTE_KEY = platform.isMac ? '⌘V' : 'Ctrl+V';
+
 /** Mensagens acionáveis: cada erro diz o que fazer, não só o que quebrou. */
 const ERROR_MESSAGES: Record<string, string> = {
-  MIC_DENIED:
-    'Permissão de microfone negada. Ajustes → Privacidade e Segurança → Microfone.',
+  MIC_DENIED: platform.isMac
+    ? 'Permissão de microfone negada. Ajustes → Privacidade e Segurança → Microfone.'
+    : 'Permissão de microfone negada. Libere o microfone nas configurações de privacidade do sistema.',
   NO_INPUT_DEVICE: 'Nenhum microfone disponível. Conecte um dispositivo de entrada.',
   ENGINE_FAIL: 'Não foi possível iniciar a captura de áudio.',
   WRITE_FAIL: 'Não foi possível gravar o arquivo de áudio temporário.',
   AX_DENIED:
-    'Sem permissão de Acessibilidade para colar. O texto está na área de transferência, cole com ⌘V.',
+    `Sem permissão de Acessibilidade para colar. O texto está na área de transferência, cole com ${PASTE_KEY}.`,
   PASTE_UNAVAILABLE:
     'Colagem automática não disponível aqui. O texto está na área de transferência, cole com Ctrl+V.',
   PASTE_FAILED:
-    'Não consegui colar neste app. O texto está na área de transferência, cole com ⌘V.',
+    `Não consegui colar neste app. O texto está na área de transferência, cole com ${PASTE_KEY}.`,
   EMPTY_TEXT: 'Nada para colar.',
   EMPTY_AUDIO: 'Não ouvi nada. Fale um pouco mais perto do microfone.',
   TOO_SHORT: 'Gravação curta demais.',
@@ -163,7 +167,7 @@ export class Session extends EventEmitter {
     recordPromise.catch(() => undefined);
 
     this.setState('recording');
-    this.play(config.soundStart);
+    this.play(config.soundStart, false);
 
     // A ordem aqui não é estética. Ler o app em foco tem de vir ANTES de
     // qualquer janela nossa aparecer: criar o overlay torna o Voice Input o
@@ -443,9 +447,16 @@ export class Session extends EventEmitter {
     this.wavPath = '';
   }
 
-  private play(sound: SystemSound): void {
+  private play(sound: SystemSound, fallbackBeep = true): void {
     if (!loadConfig().playSounds) return;
     // Feedback sonoro importa: você não olha para a barra de menu enquanto fala.
+    if (!platform.isMac) {
+      // Fora do macOS não existe a biblioteca de sons do sistema. O beep
+      // padrão cobre os desfechos; o início fica mudo para não virar eco na
+      // própria gravação.
+      if (fallbackBeep) shell.beep();
+      return;
+    }
     const child = spawn('/usr/bin/afplay', [`/System/Library/Sounds/${sound}.aiff`], {
       stdio: 'ignore',
       detached: true,

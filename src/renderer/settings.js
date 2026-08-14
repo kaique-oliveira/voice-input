@@ -85,6 +85,14 @@ async function refresh() {
   const state = await window.api.load();
   const { config, dictionary, permissions, models } = state;
 
+  // Os quatro seletores de som listam a biblioteca do macOS; fora dele o app
+  // usa o beep do sistema e escolher nome de som seria mentira na tela.
+  if (state.platform && state.platform !== 'darwin') {
+    for (const select of document.querySelectorAll('select.sound')) {
+      select.closest('.row').hidden = true;
+    }
+  }
+
   // Os seletores de som são iguais entre si: mesma lista, ordem alfabética.
   for (const select of document.querySelectorAll('select.sound')) {
     if (select.options.length) continue;

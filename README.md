@@ -413,11 +413,23 @@ Baixe em [Releases](https://github.com/kaique-oliveira/voice-input/releases):
 | Windows | `Voice.Input.Setup.x.y.z.exe` para instalar, `Voice.Input.x.y.z.exe` para rodar sem instalar |
 | Linux | `.AppImage` para rodar direto, `.deb` para Debian e Ubuntu |
 
-Na primeira execução, abra as Configurações pelo ícone da bandeja e baixe o
-modelo de transcrição. Se a colagem automática não funcionar no seu ambiente,
-troque para "só copiar" no menu do ícone.
+**No Windows, a primeira abertura esbarra no SmartScreen**, porque o
+instalador não é assinado: clique em "Mais informações" e depois em "Executar
+assim mesmo". Ao abrir, o app mostra as Configurações uma vez e depois vive na
+bandeja, perto do relógio, possivelmente atrás da setinha de ícones ocultos.
+Os modelos baixam sozinhos na primeira execução. Clicar no `.exe` de novo não
+abre outra instância: traz as Configurações da que já está rodando.
 
-No Linux, para a colagem automática funcionar em X11: `sudo apt install xdotool`.
+Se a colagem automática não funcionar no seu ambiente, troque para "só copiar"
+no menu do ícone.
+
+No Linux, para a colagem automática funcionar em X11: `sudo apt install
+xdotool`. No Wayland a colagem sintética não é permitida; use "só copiar". Em
+GNOME sem extensão de bandeja, o ícone pode não aparecer: a janela de
+Configurações da primeira execução continua acessível reabrindo o app.
+
+Os dados ficam em `%APPDATA%\VoiceInput` no Windows e `~/.config/VoiceInput`
+no Linux.
 
 O que muda fora do macOS:
 

@@ -1,4 +1,4 @@
-import { nativeImage, type NativeImage } from 'electron';
+import { nativeImage, nativeTheme, type NativeImage } from 'electron';
 import { encodePng, rasterizeMic } from './glyph';
 
 /**
@@ -33,15 +33,30 @@ export interface TrayIcons {
   busy: NativeImage;
 }
 
-let cache: TrayIcons | null = null;
+const cache = new Map<string, TrayIcons>();
 
+/**
+ * No macOS a imagem "template" resolve o tema sozinha. Windows e Linux não têm
+ * esse conceito: um ícone preto na bandeja escura do Windows é invisível, e é
+ * exatamente a bandeja padrão. Fora do macOS a cor vem do tema do sistema, e o
+ * chamador re-renderiza quando o nativeTheme muda.
+ */
 export function trayIcons(): TrayIcons {
-  if (cache) return cache;
-  cache = {
-    idle: buildImage([0, 0, 0], 1, true),
+  const isMac = process.platform === 'darwin';
+  const dark = !isMac && nativeTheme.shouldUseDarkColors;
+  const key = isMac ? 'mac' : dark ? 'dark' : 'light';
+
+  const cached = cache.get(key);
+  if (cached) return cached;
+
+  // Bandeja escura pede ícone claro; bandeja clara, ícone escuro.
+  const ink: [number, number, number] = isMac ? [0, 0, 0] : dark ? [235, 235, 235] : [25, 25, 25];
+  const icons: TrayIcons = {
+    idle: buildImage(ink, 1, isMac),
     // Vermelho da marca, fixo (não-template) para sobreviver ao tema.
     recording: buildImage([228, 27, 34], 1, false),
-    busy: buildImage([0, 0, 0], 0.4, true),
+    busy: buildImage(ink, 0.4, isMac),
   };
-  return cache;
+  cache.set(key, icons);
+  return icons;
 }

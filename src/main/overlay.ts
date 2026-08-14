@@ -51,8 +51,9 @@ function create(): BrowserWindow {
     // 'panel' cria um NSPanel em vez de uma NSWindow comum. É o que torna a
     // janela realmente não-ativadora: só com `focusable: false` o clique nos
     // botões ainda trazia o Voice Input para frente e tirava o cursor de texto
-    // do app onde você estava.
-    type: 'panel',
+    // do app onde você estava. O tipo só existe no macOS; nos outros sistemas
+    // passar um tipo desconhecido derruba a criação da janela.
+    ...(process.platform === 'darwin' ? { type: 'panel' as const } : {}),
     focusable: false,
     alwaysOnTop: true,
     show: false,

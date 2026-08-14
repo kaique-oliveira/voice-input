@@ -1,5 +1,6 @@
+import fs from 'node:fs';
 import { app, globalShortcut, Notification, systemPreferences } from 'electron';
-import { ensureDirs } from './paths';
+import { configFile, ensureDirs } from './paths';
 import { loadConfig, type Config } from './config';
 import { Session } from './session';
 import { TrayController, formatAccelerator } from './tray';
@@ -25,6 +26,11 @@ let registeredShortcut = '';
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 }
+
+// Quem clica no .exe de novo (comum no Windows, onde o app "não abriu" porque
+// vive na bandeja) merece ver alguma coisa em vez de um processo que morre em
+// silêncio: a primeira instância abre as Configurações.
+app.on('second-instance', () => openSettings());
 
 /**
  * Em desenvolvimento o Electron.app não está registrado no sistema e o macOS
@@ -101,6 +107,15 @@ function registerShortcut(config: Config): void {
 }
 
 app.whenReady().then(() => {
+  // As notificações no Windows só aparecem quando o AppUserModelID do processo
+  // bate com o do atalho instalado. Sem isto, o aviso de "modelo baixando",
+  // que é o único feedback do primeiro boot, simplesmente não existe.
+  if (process.platform === 'win32') app.setAppUserModelId('com.voiceinput.app');
+
+  // A primeira execução precisa ser detectada antes de qualquer loadConfig,
+  // porque salvar a config cria o arquivo que serve de marcador.
+  const firstRun = !fs.existsSync(configFile);
+
   ensureDirs();
 
   // Sem ícone no Dock e sem foco: o app nunca rouba o cursor de texto do app
@@ -142,6 +157,18 @@ app.whenReady().then(() => {
   // É o que faltava para instalar numa conta nova de macOS e sair ditando: a
   // pasta de modelos é por usuário, e antes o app só reclamava no log.
   void fetchModels(config);
+
+  // Fora do macOS o app abre sem nenhuma janela e com um ícone discreto na
+  // bandeja, que no Windows ainda pode cair no overflow (a setinha ^). Na
+  // primeira execução isso é indistinguível de "não abriu". As Configurações
+  // abertas são a prova de vida, e explicam onde o app mora.
+  if (!platform.isMac && firstRun) {
+    openSettings();
+    new Notification({
+      title: 'Voice Input',
+      body: 'O app fica na bandeja, perto do relógio. Clique no ícone do microfone para gravar, ou use o atalho.',
+    }).show();
+  }
 
   // Permissão faltando vira aviso, não janela: a de Configurações só abre
   // quando você pede. Uma janela aparecendo sozinha no boot é intrusiva.

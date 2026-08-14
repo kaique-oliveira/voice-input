@@ -84,6 +84,7 @@ export function registerSettingsIpc(hooks: SettingsHooks): void {
       // Helper ausente: a UI mostra "desconhecido" em vez de quebrar.
     }
     return {
+      platform: process.platform,
       config: loadConfig(),
       defaults: DEFAULT_CONFIG,
       dictionary: loadDictionary(),
@@ -128,7 +129,12 @@ export function registerSettingsIpc(hooks: SettingsHooks): void {
   });
 
   // Escolher som pelo nome é adivinhação. Toca na hora, você decide ouvindo.
+  // A biblioteca de sons é do macOS; fora dele o feedback é o beep do sistema.
   ipcMain.handle('sound:preview', (_event, sound: string) => {
+    if (!platform.isMac) {
+      shell.beep();
+      return;
+    }
     if (!/^[A-Za-z]+$/.test(sound)) return;
     const child = spawn('/usr/bin/afplay', [`/System/Library/Sounds/${sound}.aiff`], {
       stdio: 'ignore',

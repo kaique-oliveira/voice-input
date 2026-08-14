@@ -1,8 +1,7 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import fs from 'node:fs';
 import net from 'node:net';
-import path from 'node:path';
-import { binDir, modelPath } from './paths';
+import { llamaServerBin as serverBin, modelPath } from './paths';
 import { log } from './log';
 import type { Config } from './config';
 
@@ -25,8 +24,6 @@ export class LlmError extends Error {
     this.name = 'LlmError';
   }
 }
-
-const serverBin = path.join(binDir, 'llama-server');
 
 function findFreePort(): Promise<number> {
   return new Promise((resolve, reject) => {
