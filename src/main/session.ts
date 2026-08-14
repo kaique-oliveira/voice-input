@@ -237,7 +237,21 @@ export class Session extends EventEmitter {
         ? buildPrompt(mode, termsFromDictionary(dictionary))
         : '';
 
-      const raw = await this.whisper.transcribe(this.wavPath, prompt);
+      // Duas tentativas: falha transitória (servidor que morreu ou travou;
+      // nos dois casos ele já foi derrubado) ganha um novo servidor limpo.
+      // Erro determinístico (modelo ausente, sem binário) estoura direto.
+      let raw: string;
+      try {
+        raw = await this.whisper.transcribe(this.wavPath, prompt);
+      } catch (error) {
+        const transient =
+          error instanceof WhisperError && error.code === 'TRANSCRIBE_FAILED';
+        if (!transient) throw error;
+        log.warn('transcrição falhou, segunda tentativa com servidor novo');
+        this.setState('loading');
+        raw = await this.whisper.transcribe(this.wavPath, prompt);
+        this.setState('transcribing');
+      }
       // Nunca registramos o texto em si, só o tamanho, para diagnóstico.
       log.info(`transcrito: ${raw.length} caracteres, modo ${mode}`);
 
