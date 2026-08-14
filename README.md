@@ -194,6 +194,15 @@ frases, era uma pausa. Interrogação e exclamação ficam: essas carregam tom.
 Termo com grafia própria nunca é rebaixado, então "Claude" e "GitHub"
 continuam como estão.
 
+**Nenhuma chamada local espera para sempre.** O whisper-server pode travar sem
+morrer, e antes isso deixava o app preso em "transcrevendo…" até ser reiniciado
+na mão. A transcrição tem teto proporcional ao áudio, 30 s mais 8 vezes a
+duração, com folga para CPU fraca. Estourar derruba o servidor, e a transcrição
+ganha uma segunda tentativa com um servidor limpo. Erro determinístico, como
+modelo ausente, não é retentado, porque insistir só atrasaria a mensagem certa.
+O segundo estágio tem teto de 25 s e, por ser opcional, estourar não é erro:
+o texto segue sem ele.
+
 **Helper em Swift.** Gravar pelo renderer do Electron custaria ou 80 MB
 permanentes de memória, ou 300 ms de latência no início da fala, o que corta a
 primeira palavra. O helper é um arquivo só, sem projeto Xcode, e resolve também
