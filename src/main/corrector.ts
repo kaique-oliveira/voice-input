@@ -275,7 +275,7 @@ function dedupeLoops(text: string): string {
  *
  * O Whisper pontua fala corrida como prosa de livro: cada respiro vira ponto
  * final, e a palavra seguinte vem com maiúscula. Escrito, isso soa formal
- * demais para onde o texto de fato vai parar — mensagem de WhatsApp e prompt
+ * demais para onde o texto de fato vai parar, porque mensagem de WhatsApp e prompt
  * não terminam em ponto, e "de agosto. De setembro" não era duas frases, era
  * uma pausa no meio da mesma.
  *

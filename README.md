@@ -176,7 +176,7 @@ O que ele ganha é o que regex nenhuma alcança, nome próprio:
 **A conferência é uma pergunta só: as palavras são as mesmas, na mesma ordem?**
 Antes eram três, com limiar: 18% de palavras novas, 72% de conteúdo preservado,
 70% do último terço. Aqueles limiares existiam porque o modelo tinha licença
-para apagar hesitação. Sem essa licença, limiar vira brecha — trocar "eu" por
+para apagar hesitação. Sem essa licença, limiar vira brecha, trocar "eu" por
 "você" num texto de 17 palavras dá 6% de palavras novas e passava batido. Foi
 exatamente o que o Gemma 1B fez no teste, e passou.
 
