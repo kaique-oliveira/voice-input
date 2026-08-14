@@ -18,6 +18,8 @@ contextBridge.exposeInMainWorld('api', {
   previewSound: (sound: string) => ipcRenderer.invoke('sound:preview', sound),
   unusedModels: () => ipcRenderer.invoke('model:unused'),
   removeUnusedModels: () => ipcRenderer.invoke('model:remove-unused'),
+  onModelDone: (handler: (file: string) => void) =>
+    ipcRenderer.on('model:done', (_event, file: string) => handler(file)),
   onModelProgress: (
     handler: (progress: { file: string; received: number; total: number }) => void
   ) => {

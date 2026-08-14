@@ -6,7 +6,7 @@ import { loadDictionary, saveDictionary, DEFAULT_DICTIONARY } from './dictionary
 import { dataDir } from './paths';
 import {
   MODELS, POLISH_MODELS, isInstalled, installedModels, download, cancelDownload,
-  unusedModels, removeModel,
+  unusedModels, removeModel, downloadingFiles,
 } from './model';
 import * as helper from './helper';
 import * as platform from './platform';
@@ -65,6 +65,15 @@ export function hideSettings(): void {
   if (window && !window.isDestroyed() && window.isVisible()) window.hide();
 }
 
+/** Progresso e fim de download chegam na janela venha de onde vier o pedido. */
+export function sendProgress(progress: { file: string; received: number; total: number }): void {
+  if (window && !window.isDestroyed()) window.webContents.send('model:progress', progress);
+}
+
+export function sendDone(file: string): void {
+  if (window && !window.isDestroyed()) window.webContents.send('model:done', file);
+}
+
 function toCatalog(list: typeof MODELS) {
   return list.map((entry) => ({
     file: entry.file,
@@ -92,18 +101,19 @@ export function registerSettingsIpc(hooks: SettingsHooks): void {
       models: installedModels(),
       catalog: toCatalog(MODELS),
       polishCatalog: toCatalog(POLISH_MODELS),
+      // A janela pode abrir no meio da busca automática do boot. Sem isto ela
+      // mostrava "Modelo não instalado" com um botão que não fazia nada.
+      downloading: downloadingFiles(),
     };
   });
 
   ipcMain.handle('model:download', async (_event, file: string) => {
     try {
-      await download(file, (progress) => {
-        if (window && !window.isDestroyed()) {
-          window.webContents.send('model:progress', progress);
-        }
-      });
+      await download(file, sendProgress);
+      sendDone(file);
       return { ok: true };
     } catch (error) {
+      sendDone(file);
       return { ok: false, error: (error as Error).message };
     }
   });

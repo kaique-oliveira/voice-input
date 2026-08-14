@@ -8,6 +8,7 @@ import { loadConfig, type Config, type Mode, type SystemSound } from './config';
 import { loadDictionary } from './dictionary';
 import { buildPrompt, termsFromDictionary } from './glossary';
 import { conversational, correct } from './corrector';
+import { downloadingFiles } from './model';
 import { resolveMode, type FrontApp } from './context';
 import * as helper from './helper';
 import * as platform from './platform';
@@ -492,8 +493,14 @@ export class Session extends EventEmitter {
       error instanceof WhisperError
         ? error.code
         : 'UNKNOWN';
+    // Modelo faltando enquanto ele está sendo baixado não é problema de
+    // configuração: mandar abrir Configurações e clicar em Baixar era conselho
+    // errado, e o botão nem existe durante o download.
+    const fetching = downloadingFiles().includes(loadConfig().model);
     const message =
-      ERROR_MESSAGES[code] ?? (error instanceof Error ? error.message : 'Erro inesperado.');
+      code === 'MODEL_MISSING' && fetching
+        ? 'O modelo ainda está baixando. Assim que terminar, o ditado funciona.'
+        : ERROR_MESSAGES[code] ?? (error instanceof Error ? error.message : 'Erro inesperado.');
 
     log.error(`falhou [${code}] ${message}`, error);
     // Colagem que falha não é a mesma coisa que ditado perdido: o texto está

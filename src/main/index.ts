@@ -4,7 +4,7 @@ import { configFile, ensureDirs } from './paths';
 import { loadConfig, type Config } from './config';
 import { Session } from './session';
 import { TrayController, formatAccelerator } from './tray';
-import { openSettings, registerSettingsIpc } from './settings';
+import { openSettings, registerSettingsIpc, sendDone, sendProgress } from './settings';
 import { registerOverlayIpc } from './overlay';
 import { log } from './log';
 import { ensureModels, isInstalled } from './model';
@@ -63,7 +63,9 @@ async function fetchModels(config: Config): Promise<void> {
   }).show();
 
   let announced = 0;
-  await ensureModels(missing, ({ file, received, total }) => {
+  await ensureModels(missing, (progress) => {
+    sendProgress(progress);
+    const { file, received, total } = progress;
     // O log é o único lugar onde isso aparece enquanto a janela está fechada.
     const percent = total ? Math.floor((received / total) * 100) : 0;
     if (percent >= announced + 25) {
@@ -71,6 +73,8 @@ async function fetchModels(config: Config): Promise<void> {
       log.info(`${file}: ${percent}%`);
     }
   });
+
+  for (const file of missing) sendDone(file);
 
   const pending = wanted.filter((file) => file && !isInstalled(file));
   if (pending.length === 0) {

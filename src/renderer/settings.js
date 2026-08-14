@@ -34,7 +34,8 @@ const SOUNDS = [
 ];
 
 let catalog = [];
-let downloading = false;
+// Arquivos com download em voo, venha o pedido do botão ou da busca do boot.
+let downloading = new Set();
 
 function formatBytes(bytes) {
   return `${(bytes / 1024 / 1024).toFixed(0)} MB`;
@@ -45,21 +46,29 @@ function renderModelState() {
   const entry = catalog.find((item) => item.file === $('model').value);
   $('model-note').textContent = entry ? entry.note : 'Modelo personalizado.';
 
+  const busy = downloading.has($('model').value);
   const needsDownload = Boolean(entry) && !entry.installed;
-  $('model-download-row').hidden = !needsDownload && !downloading;
+  $('model-download-row').hidden = !needsDownload && !busy;
   if (!entry) return;
 
-  if (!downloading) {
-    $('model-download-label').textContent = entry.installed
-      ? 'Modelo instalado'
-      : 'Modelo não instalado';
-    $('model-download-hint').textContent = entry.installed
-      ? ''
-      : `${formatBytes(entry.bytes)}. Baixado uma vez, do Hugging Face.`;
-    $('model-bar').hidden = true;
-    $('model-download').hidden = false;
-    $('model-cancel').hidden = true;
+  if (busy) {
+    $('model-download-label').textContent = 'Baixando…';
+    $('model-bar').hidden = false;
+    $('model-download').hidden = true;
+    $('model-cancel').hidden = false;
+    return;
   }
+
+  $('model-download-label').textContent = entry.installed
+    ? 'Modelo instalado'
+    : 'Modelo não instalado';
+  $('model-download-hint').textContent = entry.installed
+    ? ''
+    : `${formatBytes(entry.bytes)}. Baixado uma vez, do Hugging Face.`;
+  $('model-bar').hidden = true;
+  // Instalado não tem o que baixar: o botão junto do rótulo era contradição.
+  $('model-download').hidden = Boolean(entry.installed);
+  $('model-cancel').hidden = true;
 }
 
 const SYMBOLS = [
@@ -84,6 +93,7 @@ function setStatus(el, ok, okText, badText) {
 async function refresh() {
   const state = await window.api.load();
   const { config, dictionary, permissions, models } = state;
+  for (const file of state.downloading ?? []) downloading.add(file);
 
   // Os quatro seletores de som listam a biblioteca do macOS; fora dele o app
   // usa o beep do sistema e escolher nome de som seria mentira na tela.
@@ -138,11 +148,22 @@ async function refresh() {
   // Segundo estágio: a linha de download só aparece se o modelo faltar.
   const polishEntry = state.polishCatalog.find((e) => e.file === config.polishModel);
   polishModelFile = config.polishModel;
+  const polishBusy = downloading.has(config.polishModel);
   const needsPolishModel = config.polish && polishEntry && !polishEntry.installed;
-  $('polish-download-row').hidden = !needsPolishModel;
-  if (polishEntry && !polishEntry.installed) {
+  $('polish-download-row').hidden = !needsPolishModel && !polishBusy;
+  if (polishBusy) {
+    $('polish-label').textContent = 'Baixando…';
+    $('polish-bar').hidden = false;
+    $('polish-download').hidden = true;
+  } else if (polishEntry && !polishEntry.installed) {
     $('polish-label').textContent = 'Modelo não instalado';
     $('polish-hint').textContent = `${formatBytes(polishEntry.bytes)}. ${polishEntry.note}`;
+    $('polish-bar').hidden = true;
+    $('polish-download').hidden = false;
+  } else if (polishEntry) {
+    $('polish-label').textContent = 'Modelo instalado';
+    $('polish-hint').textContent = '';
+    $('polish-bar').hidden = true;
   }
 
   applyPermissions(permissions);
@@ -168,10 +189,13 @@ $('unused-remove').addEventListener('click', async () => {
 let polishModelFile = '';
 
 $('polish-download').addEventListener('click', async () => {
+  const file = polishModelFile;
+  downloading.add(file);
   $('polish-download').hidden = true;
   $('polish-bar').hidden = false;
   $('polish-label').textContent = 'Baixando…';
-  const result = await window.api.downloadModel(polishModelFile);
+  const result = await window.api.downloadModel(file);
+  downloading.delete(file);
   if (!result.ok && result.error) {
     $('polish-label').textContent = 'Falha no download';
     $('polish-hint').textContent = result.error;
@@ -319,14 +343,14 @@ $('model').addEventListener('change', renderModelState);
 
 $('model-download').addEventListener('click', async () => {
   const file = $('model').value;
-  downloading = true;
+  downloading.add(file);
   $('model-download').hidden = true;
   $('model-cancel').hidden = false;
   $('model-bar').hidden = false;
   $('model-download-label').textContent = 'Baixando…';
 
   const result = await window.api.downloadModel(file);
-  downloading = false;
+  downloading.delete(file);
   if (!result.ok && result.error) {
     $('model-download-label').textContent = 'Falha no download';
     $('model-download-hint').textContent = result.error;
@@ -345,8 +369,23 @@ window.api.onModelProgress(({ file, received, total }) => {
   const label = `${formatBytes(received)} de ${formatBytes(total)} (${percent.toFixed(0)}%)`;
   // O mesmo evento serve aos dois downloads; o arquivo diz qual barra mexer.
   const isPolish = file === polishModelFile;
+  const row = isPolish ? 'polish-download-row' : 'model-download-row';
+  if (!downloading.has(file)) {
+    // Download que começou sozinho no boot: a janela precisa assumir o estado.
+    downloading.add(file);
+    $(row).hidden = false;
+    $(isPolish ? 'polish-bar' : 'model-bar').hidden = false;
+    $(isPolish ? 'polish-download' : 'model-download').hidden = true;
+    $(isPolish ? 'polish-label' : 'model-download-label').textContent = 'Baixando…';
+  }
   $(isPolish ? 'polish-bar-fill' : 'model-bar-fill').style.width = `${percent.toFixed(1)}%`;
   $(isPolish ? 'polish-hint' : 'model-download-hint').textContent = label;
+});
+
+// Terminou, com sucesso ou não: quem manda no que aparece é o estado do disco.
+window.api.onModelDone((file) => {
+  downloading.delete(file);
+  void refresh();
 });
 
 // ---------------------------------------------------------------- permissões

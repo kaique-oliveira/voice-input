@@ -158,9 +158,15 @@ export interface DownloadProgress {
 }
 
 let active: AbortController | null = null;
+/** Downloads em voo, por arquivo. Quem pedir o mesmo arquivo entra de carona. */
+const inFlight = new Map<string, Promise<void>>();
 
 export function isDownloading(): boolean {
   return active !== null;
+}
+
+export function downloadingFiles(): string[] {
+  return [...inFlight.keys()];
 }
 
 export function cancelDownload(): void {
@@ -168,13 +174,27 @@ export function cancelDownload(): void {
   active = null;
 }
 
-export async function download(
+export function download(
+  file: string,
+  onProgress: (progress: DownloadProgress) => void
+): Promise<void> {
+  // O app busca modelo sozinho no boot. Sem isto, clicar em Baixar durante essa
+  // busca devolvia "já existe um download em andamento" e parecia defeito.
+  const existing = inFlight.get(file);
+  if (existing) return existing;
+
+  const task = runDownload(file, onProgress).finally(() => inFlight.delete(file));
+  inFlight.set(file, task);
+  return task;
+}
+
+async function runDownload(
   file: string,
   onProgress: (progress: DownloadProgress) => void
 ): Promise<void> {
   const model = findModel(file);
   if (!model) throw new Error(`Modelo desconhecido: ${file}`);
-  if (active) throw new Error('Já existe um download em andamento.');
+  if (active) throw new Error('Outro modelo está sendo baixado agora.');
 
   const target = modelPath(file);
   // O ".part" garante que uma queda de conexão não deixe um modelo pela
@@ -208,6 +228,14 @@ export async function download(
     });
 
     await pipeline(source, fs.createWriteStream(partial));
+
+    // Servidor pode responder 200 e entregar menos bytes do que prometeu.
+    // Aceitar isso deixaria um modelo truncado passando por instalado, e o
+    // erro só apareceria depois, na hora de transcrever.
+    const written = fs.statSync(partial).size;
+    if (total > 0 && written < total * 0.99) {
+      throw new Error(`Download incompleto: ${written} de ${total} bytes.`);
+    }
     fs.renameSync(partial, target);
     onProgress({ file, received: total, total });
     log.info(`modelo ${file} instalado`);
