@@ -173,6 +173,12 @@ export class WhisperService {
     await this.ensureReady();
 
     const audio = await fs.promises.readFile(wavPath);
+    // Um servidor que TRAVA (sem morrer) deixava este fetch pendurado para
+    // sempre: a sessão ficava em "transcrevendo…" e o app ignorava qualquer
+    // toggle até ser reiniciado. O teto é proporcional ao áudio, com folga
+    // para CPU fraca: um i3 leva ~4x o tempo real, e aqui cabe 8x.
+    const audioSeconds = audio.length / 32_000; // 16 kHz, 16 bits, mono
+    const timeoutMs = 30_000 + Math.ceil(audioSeconds * 8_000);
     const form = new FormData();
     form.append('file', new Blob([audio], { type: 'audio/wav' }), 'audio.wav');
     form.append('response_format', 'json');
@@ -192,10 +198,18 @@ export class WhisperService {
       response = await fetch(`http://127.0.0.1:${this.port}/inference`, {
         method: 'POST',
         body: form,
+        signal: AbortSignal.timeout(timeoutMs),
       });
     } catch (error) {
-      // Servidor morreu no meio (falta de memória, crash): força novo start.
+      // Servidor morto OU pendurado: nos dois casos ele não merece confiança,
+      // derruba e o próximo ditado sobe um limpo.
       this.shutdown();
+      if ((error as Error).name === 'TimeoutError') {
+        throw new WhisperError(
+          'TRANSCRIBE_FAILED',
+          `A transcrição passou de ${Math.round(timeoutMs / 1000)}s e foi abortada.`
+        );
+      }
       throw new WhisperError(
         'TRANSCRIBE_FAILED',
         `Falha ao falar com o servidor local: ${(error as Error).message}`

@@ -161,9 +161,13 @@ export class LlmService {
   async complete(system: string, user: string, maxTokens: number): Promise<string> {
     await this.ensureReady();
 
+    // O polimento é opcional por natureza: preso por 25s, é descartado e o
+    // texto segue sem ele. Antes um llama-server pendurado segurava o ditado
+    // inteiro como refém.
     const response = await fetch(`http://127.0.0.1:${this.port}/v1/chat/completions`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      signal: AbortSignal.timeout(25_000),
       body: JSON.stringify({
         messages: [
           { role: 'system', content: system },
@@ -178,6 +182,10 @@ export class LlmService {
         // custaria segundos: não há o que deliberar em "onde vai a vírgula".
         // Modelo que não tem esse modo ignora o parâmetro.
         chat_template_kwargs: { enable_thinking: false },
+        // O prompt de sistema é idêntico em toda chamada; com o cache ligado o
+        // servidor só processa o texto novo. Já é o padrão do llama-server,
+        // mas padrão de terceiro muda sem avisar, e este importa.
+        cache_prompt: true,
       }),
     });
 
